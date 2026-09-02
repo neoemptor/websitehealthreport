@@ -49,9 +49,17 @@ export class Keyword {
             });
 
             // Count occurrences of each keyword in the body text, whole words only.
+            //
+            // The boundaries are lookarounds rather than \b because \b only sits
+            // between a word and a non-word character. A keyword ending in a symbol,
+            // such as "c++", has no boundary after the final "+", so \b could never
+            // match it. (?<!\w) and (?!\w) instead require that the match is not
+            // glued to a surrounding word character, which behaves identically to \b
+            // for ordinary keywords and also works for ones that start or end with
+            // punctuation.
             const counts = new Map<string, number>();
             keywords.forEach((keyword) => {
-                const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
+                const regex = new RegExp(`(?<!\\w)${escapeRegExp(keyword)}(?!\\w)`, 'gi');
                 counts.set(keyword, bodyText.match(regex)?.length ?? 0);
             });
 

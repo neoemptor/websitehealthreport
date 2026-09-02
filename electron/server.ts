@@ -37,23 +37,65 @@ export type StaticServer = {
  * client-side router then renders the requested route from
  * `location.pathname`.
  */
-export function startStaticServer(rootDir: string): Promise<StaticServer> {
-	const server = http.createServer((req, res) => {
-		const requestPath = decodeURIComponent((req.url ?? '/').split('?')[0].split('#')[0]);
-		const normalised = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, '');
-		let filePath = path.join(rootDir, normalised);
+/**
+ * Resolves a request path to a file inside `rootDir`, or null when the request
+ * is malformed or would escape the root.
+ *
+ * Exported for testing: the failure modes here are the ones that used to kill
+ * the process, so they are asserted directly as well as over HTTP.
+ */
+export function resolveFilePath(rootDir: string, url: string): string | null {
+	const root = path.resolve(rootDir);
+	const requestPath = decodeURIComponent(url.split('?')[0].split('#')[0]);
 
-		fs.stat(filePath, (err, stats) => {
-			if (err || !stats.isFile()) {
-				filePath = path.join(rootDir, 'index.html');
-			}
-			fs.readFile(filePath, (readErr, data) => {
+	// A null byte makes every fs and path call throw synchronously.
+	if (requestPath.includes('\0')) return null;
+
+	const normalised = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, '');
+	const filePath = path.join(root, normalised);
+
+	// Asserted, not inferred. Containment currently falls out of what
+	// path.normalize happens to do with leading "..", which is a property of
+	// an implementation rather than a rule anything enforces.
+	if (filePath !== root && !filePath.startsWith(root + path.sep)) return null;
+
+	return filePath;
+}
+
+export function startStaticServer(rootDir: string): Promise<StaticServer> {
+	const root = path.resolve(rootDir);
+
+	const server = http.createServer((req, res) => {
+		// Everything inside this listener runs on the main process's stack: an
+		// exception here is an uncaughtException that terminates Electron and
+		// loses the in-flight run. decodeURIComponent throws on "/%", and fs
+		// and path throw on a null byte ("/x%00y"), so any local process — or a
+		// browser page that guessed the ephemeral port — could kill the app.
+		let filePath: string | null;
+		try {
+			filePath = resolveFilePath(root, req.url ?? '/');
+		} catch {
+			filePath = null;
+		}
+
+		if (filePath === null) {
+			res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+			res.end('Bad request');
+			return;
+		}
+
+		const target: string = filePath;
+		fs.stat(target, (err, stats) => {
+			// The fallback path is built from the root, so it can never be the
+			// malformed value that would make readFile throw.
+			const toRead = err || !stats.isFile() ? path.join(root, 'index.html') : target;
+			fs.readFile(toRead, (readErr, data) => {
 				if (readErr) {
 					res.writeHead(404);
 					res.end('Not found');
 					return;
 				}
-				const ext = path.extname(filePath);
+				const ext = path.extname(toRead);
 				res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream' });
 				res.end(data);
 			});

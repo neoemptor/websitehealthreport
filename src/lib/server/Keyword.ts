@@ -1,55 +1,63 @@
 import puppeteer from "puppeteer";
-import type {FileType} from './GeneralLib';
+
+// Escape characters that carry meaning inside a regular expression, so that a
+// keyword such as "garage doors (perth)" is matched literally rather than
+// throwing a SyntaxError or matching the wrong thing.
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 export class Keyword {
 
     public static extract(websites: string[]): void {
         websites.forEach((site: string) => {
-        async function scrapeKeywordsAndCount(site: string): Promise<Map<string, number>> {
-          // Launch a new browser instance.
-          const browser = await puppeteer.launch();
-          
-          // Open a new page.
-          const page = await browser.newPage();
-          
-          // Navigate to the URL.
-          await page.goto(site, { waitUntil: 'domcontentloaded' });
-          
-          // Extract keywords from the meta tag and count their occurrences.
-          const keywordCounts = await page.evaluate(() => {
-            // Find the meta tag with name 'keywords'
-            const metaKeywords = document.querySelector('meta[name="keywords"]');
-            // Get the content of the meta tag, split by commas and map to lower case.
-            const keywords = metaKeywords?.getAttribute('content')?.toLowerCase().split(',') || [];
-            // Initialize a map to count keyword occurrences.
-            const counts = new Map<string, number>();
-        
-            // Iterate over each keyword and count its occurrences in the document body text.
-            keywords.forEach(keyword => {
-              const regex = new RegExp(`\\b${keyword.trim()}\\b`, 'gi'); // Word boundary regex to match whole words only
-              const matches = document.body.innerText.match(regex);
-              counts.set(keyword.trim(), matches ? matches.length : 0);
-            });
-        
-            // Convert the map to an array to return through Puppeteer.
-            return Array.from(counts);
-          });
-          
-          // Close the browser.
-          await browser.close();
-          
-          // Convert the array back to a map and return.
-          return new Map(keywordCounts);
-        }
-        
-        // Usage example:
-        scrapeKeywordsAndCount('https://example.com').then(keywordCounts => {
-          keywordCounts.forEach((count, keyword) => {
-            console.log(`${keyword}: ${count}`);
-          });
-        }).catch(error => {
-          console.error('Error scraping keywords and counting:', error);
+            Keyword.scrapeKeywordsAndCount(site)
+                .then((keywordCounts) => {
+                    console.log(`Keyword counts for ${site}:`);
+                    keywordCounts.forEach((count, keyword) => {
+                        console.log(`  ${keyword}: ${count}`);
+                    });
+                })
+                .catch((error) => {
+                    console.error(`Error scraping keywords for ${site}:`, error);
+                });
         });
-    });
+    }
+
+    private static async scrapeKeywordsAndCount(site: string): Promise<Map<string, number>> {
+        // Launch a new browser instance.
+        const browser = await puppeteer.launch();
+
+        try {
+            const page = await browser.newPage();
+            await page.goto(site, { waitUntil: 'domcontentloaded' });
+
+            // Pull the raw keywords and the body text out of the page. The counting
+            // itself happens below, in Node, so that it can share escapeRegExp —
+            // page.evaluate runs in the browser and cannot see this module's scope.
+            const { keywords, bodyText } = await page.evaluate(() => {
+                const metaKeywords = document.querySelector('meta[name="keywords"]');
+                const content = metaKeywords?.getAttribute('content')?.toLowerCase() ?? '';
+
+                return {
+                    keywords: content
+                        .split(',')
+                        .map((keyword) => keyword.trim())
+                        .filter((keyword) => keyword.length > 0),
+                    bodyText: document.body.innerText
+                };
+            });
+
+            // Count occurrences of each keyword in the body text, whole words only.
+            const counts = new Map<string, number>();
+            keywords.forEach((keyword) => {
+                const regex = new RegExp(`\\b${escapeRegExp(keyword)}\\b`, 'gi');
+                counts.set(keyword, bodyText.match(regex)?.length ?? 0);
+            });
+
+            return counts;
+        } finally {
+            await browser.close();
+        }
     }
 }

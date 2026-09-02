@@ -3,6 +3,7 @@ import { normaliseDomain } from '../src/lib/shared/url';
 import { createRegistry } from './analyzers/registry';
 import { lighthouseAnalyzer } from './analyzers/lighthouse';
 import { keywordsAnalyzer } from './analyzers/keywords';
+import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
 import { SettingsStore, type Settings } from './settings/store';
@@ -59,12 +60,12 @@ export function buildHandlers(deps: HandlerDeps) {
 
 		async resumeRun(id: string): Promise<Run> {
 			const settings = await settingsStore.read();
-			return orchestrator.resume(id, settings.analyzers);
+			return orchestrator.resume(assertRunId(id), settings.analyzers);
 		},
 
 		async cancelRun(id: string): Promise<void> {
 			deps.logger.info('run:cancel', { id });
-			await orchestrator.cancel(id);
+			await orchestrator.cancel(assertRunId(id));
 		},
 
 		/**
@@ -85,7 +86,9 @@ export function buildHandlers(deps: HandlerDeps) {
 		settled: (id: string) => orchestrator.settled(id),
 
 		listRuns: () => storage.list(),
-		loadRun: (id: string) => storage.load(id),
+		// async, so a rejected id is a rejected promise at the boundary rather
+		// than a synchronous throw the caller has to handle differently.
+		loadRun: async (id: string) => storage.load(assertRunId(id)),
 		readSettings: () => settingsStore.read(),
 		writeSettings: (settings: Settings) => settingsStore.write(settings)
 	};

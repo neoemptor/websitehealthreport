@@ -100,4 +100,18 @@ describe('buildHandlers', () => {
 		await handlers.settled(run.id);
 		expect(run.competitors).toEqual(['https://rival.com/']);
 	});
+
+	it('rejects a run id that is not in the expected format', async () => {
+		const handlers = buildHandlers({
+			userDataDir: dir,
+			emitProgress: () => {},
+			logger: { info: () => {}, error: () => {} }
+		});
+
+		for (const id of ['../../etc/passwd', 'run', '']) {
+			await expect(handlers.loadRun(id)).rejects.toThrow(/Invalid run id/);
+			await expect(handlers.resumeRun(id)).rejects.toThrow(/Invalid run id/);
+			await expect(handlers.cancelRun(id)).rejects.toThrow(/Invalid run id/);
+		}
+	});
 });

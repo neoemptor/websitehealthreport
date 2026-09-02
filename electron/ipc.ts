@@ -1,6 +1,7 @@
 import { ipcMain, type BrowserWindow } from 'electron';
 import * as path from 'path';
 import { buildHandlers, type Logger } from './handlers';
+import { assertRunId } from './run/id';
 
 export type { Logger };
 
@@ -42,7 +43,9 @@ export function registerIpc(deps: {
 
 	ipcMain.handle(
 		'pdf:export',
-		wrap('pdf:export', async (runId: string) => {
+		wrap('pdf:export', async (rawRunId: string) => {
+			// The id becomes both a URL path segment and an output file path.
+			const runId = assertRunId(rawRunId);
 			const { exportRunPdf } = await import('./pdf');
 
 			// Renders the same /report/:id route the operator reviews on screen,

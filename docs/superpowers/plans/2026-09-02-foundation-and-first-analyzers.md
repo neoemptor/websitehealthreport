@@ -1914,10 +1914,28 @@ app.on('window-all-closed', () => {
 
 - [ ] **Step 8: Add scripts and electron-builder config to `package.json`**
 
+Create `electron/postbuild.cjs`:
+
+```js
+const fs = require('fs');
+const path = require('path');
+
+// tsconfig.electron.json emits CommonJS, but the root package.json declares
+// "type": "module" for Vite and SvelteKit. Without this, Node loads the
+// compiled main.js as ESM and dies with "ReferenceError: exports is not
+// defined in ES module scope". Scoping the declaration to the output subtree
+// fixes it without touching the root package.json, which would break Vite.
+const dir = path.join(__dirname, '..', 'dist-electron');
+fs.mkdirSync(dir, { recursive: true });
+fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ type: 'commonjs' }), 'utf-8');
+```
+
+Add `/dist-electron` to `.gitignore` alongside the existing `/build` entry.
+
 Add to `"scripts"`:
 
 ```json
-    "electron:compile": "tsc -p tsconfig.electron.json",
+    "electron:compile": "tsc -p tsconfig.electron.json && node electron/postbuild.cjs",
     "electron:dev": "npm run electron:compile && concurrently \"vite dev\" \"electron dist-electron/electron/main.js\"",
     "app:build": "vite build && npm run electron:compile && electron-builder"
 ```

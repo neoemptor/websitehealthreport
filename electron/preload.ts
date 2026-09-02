@@ -9,6 +9,7 @@ export type WhrApi = {
 		enabledAnalyzers: AnalyzerId[];
 	}): Promise<Run>;
 	resumeRun(id: string): Promise<Run>;
+	cancelRun(id: string): Promise<void>;
 	listRuns(): Promise<Run[]>;
 	loadRun(id: string): Promise<Run>;
 	readSettings(): Promise<Settings>;
@@ -20,6 +21,7 @@ export type WhrApi = {
 const api: WhrApi = {
 	startRun: (input) => ipcRenderer.invoke('run:start', input),
 	resumeRun: (id) => ipcRenderer.invoke('run:resume', id),
+	cancelRun: (id) => ipcRenderer.invoke('run:cancel', id),
 	listRuns: () => ipcRenderer.invoke('run:list'),
 	loadRun: (id) => ipcRenderer.invoke('run:load', id),
 	readSettings: () => ipcRenderer.invoke('settings:read'),

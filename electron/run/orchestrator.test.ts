@@ -384,4 +384,135 @@ describe('Orchestrator', () => {
 
 		expect((await storage.load(started.id)).status).toBe('aborted');
 	});
+
+	it('cancelling a run ends it as aborted and stops tasks that have not started', async () => {
+		let started = 0;
+		let release: () => void = () => {};
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const slow = (id: string) =>
+			analyzer(id, {
+				// 'limited' gates at two, so the third task is still queued when
+				// the run is cancelled and must never start at all.
+				concurrency: 'limited',
+				analyze: async () => {
+					started++;
+					await blocked;
+					return { ran: id };
+				}
+			});
+
+		const orchestrator = new Orchestrator(
+			createRegistry([slow('keywords'), slow('wayback'), slow('security')]),
+			storage,
+			() => {}
+		);
+
+		const run = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['keywords', 'wayback', 'security'],
+			settings: {}
+		});
+
+		// Let the first two tasks take their slots.
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(started).toBe(2);
+
+		const cancelled = orchestrator.cancel(run.id);
+		release();
+		await cancelled;
+
+		const final = await storage.load(run.id);
+		expect(final.status).toBe('aborted');
+		// The queued task never ran, and no cancelled task was written down as
+		// a failure — those cells stay pending so a resume picks them up.
+		expect(started).toBe(2);
+		for (const result of Object.values(final.domains[0].analyzers)) {
+			expect(result.status).not.toBe('failed');
+		}
+	});
+
+	it('aborts the analyzer signal when a run is cancelled', async () => {
+		let aborted = false;
+		const orchestrator = new Orchestrator(
+			createRegistry([
+				analyzer('keywords', {
+					analyze: (_domain, _settings, signal) =>
+						new Promise((resolve) => {
+							signal.addEventListener('abort', () => {
+								aborted = true;
+								resolve({ ran: 'keywords' });
+							});
+						})
+				})
+			]),
+			storage,
+			() => {}
+		);
+
+		const run = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['keywords'],
+			settings: {}
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		await orchestrator.cancel(run.id);
+
+		expect(aborted).toBe(true);
+		expect((await storage.load(run.id)).status).toBe('aborted');
+	});
+
+	it('a cancelled run can be resumed and finishes the work that was left', async () => {
+		let release: () => void = () => {};
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let calls = 0;
+
+		const orchestrator = new Orchestrator(
+			createRegistry([
+				analyzer('keywords', {
+					analyze: async () => {
+						calls++;
+						if (calls === 1) await blocked;
+						return { ran: 'keywords' };
+					}
+				})
+			]),
+			storage,
+			() => {}
+		);
+
+		const run = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['keywords'],
+			settings: {}
+		});
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		const cancelled = orchestrator.cancel(run.id);
+		release();
+		await cancelled;
+
+		await orchestrator.resume(run.id, {});
+		await orchestrator.settled(run.id);
+
+		const final = await storage.load(run.id);
+		expect(final.status).toBe('complete');
+		expect(final.domains[0].analyzers.keywords?.status).toBe('ok');
+	});
+
+	it('cancelling a run that is not in flight is a no-op', async () => {
+		const orchestrator = new Orchestrator(
+			createRegistry([analyzer('keywords')]),
+			storage,
+			() => {}
+		);
+		await expect(orchestrator.cancel('2026-01-01T000000-nothing')).resolves.toBeUndefined();
+	});
 });

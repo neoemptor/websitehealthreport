@@ -43,7 +43,12 @@ app.whenReady().then(async () => {
 	}
 
 	const window = await createWindow(rendererBase);
-	registerIpc({ userDataDir: app.getPath('userData'), window, logger, rendererBase });
+	const ipc = registerIpc({ userDataDir: app.getPath('userData'), window, logger, rendererBase });
+
+	// Nothing can still be running in a process that has just started, so any
+	// run left on 'running' was interrupted; mark it aborted so it can be
+	// resumed or read instead of being stuck.
+	await ipc.recoverInterruptedRuns();
 
 	app.on('activate', async () => {
 		if (BrowserWindow.getAllWindows().length === 0) await createWindow(rendererBase);

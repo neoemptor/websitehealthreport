@@ -51,6 +51,21 @@ export function buildHandlers(deps: HandlerDeps) {
 			return orchestrator.resume(id, settings.analyzers);
 		},
 
+		async cancelRun(id: string): Promise<void> {
+			deps.logger.info('run:cancel', { id });
+			await orchestrator.cancel(id);
+		},
+
+		/**
+		 * Startup recovery: a run left on 'running' by a killed process can
+		 * never be resumed or read otherwise.
+		 */
+		async recoverInterruptedRuns(): Promise<string[]> {
+			const ids = await storage.markInterruptedAsAborted();
+			if (ids.length > 0) deps.logger.info('run:recovered', { ids });
+			return ids;
+		},
+
 		listRuns: () => storage.list(),
 		loadRun: (id: string) => storage.load(id),
 		readSettings: () => settingsStore.read(),

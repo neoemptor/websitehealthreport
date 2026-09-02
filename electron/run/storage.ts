@@ -37,6 +37,25 @@ export class RunStorage {
 		}
 	}
 
+	/**
+	 * Rewrites every run still marked running as aborted. Called once at
+	 * startup: nothing can be running in a process that has only just begun,
+	 * so a run left on running is one the app was killed in the middle of.
+	 * Left alone it is a dead end — the run screen gates both resume and the
+	 * report behind "not running" — and it can never leave that state on its
+	 * own. Returns the ids it rewrote.
+	 */
+	async markInterruptedAsAborted(): Promise<string[]> {
+		const rewritten: string[] = [];
+		for (const run of await this.list()) {
+			if (run.status !== 'running') continue;
+			run.status = 'aborted';
+			await this.save(run);
+			rewritten.push(run.id);
+		}
+		return rewritten;
+	}
+
 	async list(): Promise<Run[]> {
 		let entries: string[];
 		try {

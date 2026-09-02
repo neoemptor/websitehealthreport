@@ -4,6 +4,8 @@ import { buildHandlers, type Logger } from './handlers';
 
 export type { Logger };
 
+export type RegisteredIpc = { recoverInterruptedRuns(): Promise<string[]> };
+
 export function registerIpc(deps: {
 	userDataDir: string;
 	window: BrowserWindow;
@@ -11,7 +13,7 @@ export function registerIpc(deps: {
 	/** Origin the renderer is served from — see server.ts for why the PDF
 	 *  export window needs a real HTTP origin rather than a file:// path. */
 	rendererBase: string;
-}): void {
+}): RegisteredIpc {
 	const handlers = buildHandlers({
 		userDataDir: deps.userDataDir,
 		logger: deps.logger,
@@ -32,6 +34,7 @@ export function registerIpc(deps: {
 
 	ipcMain.handle('run:start', wrap('run:start', handlers.startRun));
 	ipcMain.handle('run:resume', wrap('run:resume', handlers.resumeRun));
+	ipcMain.handle('run:cancel', wrap('run:cancel', handlers.cancelRun));
 	ipcMain.handle('run:list', wrap('run:list', handlers.listRuns));
 	ipcMain.handle('run:load', wrap('run:load', handlers.loadRun));
 	ipcMain.handle('settings:read', wrap('settings:read', handlers.readSettings));
@@ -51,4 +54,6 @@ export function registerIpc(deps: {
 			});
 		})
 	);
+
+	return { recoverInterruptedRuns: handlers.recoverInterruptedRuns };
 }

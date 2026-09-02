@@ -7,6 +7,7 @@
 	let run: Run | null = null;
 	let error = '';
 	let unsubscribe: (() => void) | null = null;
+	let cancelling = false;
 
 	onMount(async () => {
 		// Subscribe before the first load, not after it: the run is already
@@ -44,11 +45,25 @@
 	async function resume() {
 		if (run) run = await api().resumeRun(run.id);
 	}
+
+	async function cancel() {
+		if (!run) return;
+		cancelling = true;
+		try {
+			await api().cancelRun(run.id);
+		} catch (e) {
+			error = (e as Error).message;
+		} finally {
+			cancelling = false;
+		}
+	}
 </script>
 
 {#if error}
 	<p role="alert">{error}</p>
-{:else if run}
+{/if}
+
+{#if run}
 	<h1>{run.client}</h1>
 	<p>Status: {run.status}</p>
 
@@ -72,11 +87,17 @@
 		</tbody>
 	</table>
 
-	{#if run.status !== 'running'}
-		<button on:click={resume}>Re-run failed</button>
+	{#if run.status === 'running'}
+		<button on:click={cancel} disabled={cancelling}>
+			{cancelling ? 'Cancelling…' : 'Cancel run'}
+		</button>
+	{:else}
+		<!-- An aborted run reaches here too: it keeps whatever landed before it
+		     stopped, so both resuming it and reading its report must stay open. -->
+		<button on:click={resume}>{run.status === 'aborted' ? 'Resume run' : 'Re-run failed'}</button>
 		<a href={`/report/${run.id}`}>View report</a>
 	{/if}
-{:else}
+{:else if !error}
 	<p>Loading…</p>
 {/if}
 

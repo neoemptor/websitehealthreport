@@ -13,7 +13,7 @@ export type StartInput = {
 	settings: Record<string, unknown>;
 };
 
-type ActiveRun = { done: Promise<void> };
+type ActiveRun = { controller: AbortController; done: Promise<void> };
 
 export class Orchestrator {
 	/** In-flight executions, keyed by run id. */
@@ -52,11 +52,28 @@ export class Orchestrator {
 	}
 
 	async resume(id: string, settings: Record<string, unknown>): Promise<Run> {
+		// Resuming a run that is already executing would launch a second
+		// execution over the same file and orphan the first one's controller.
+		if (this.active.has(id)) return this.storage.load(id);
+
 		const run = await this.storage.load(id);
 		run.status = 'running';
 		await this.storage.save(run);
 		this.launch(run, settings);
 		return structuredClone(run);
+	}
+
+	/**
+	 * Stops the analyzers for `id` and leaves the run aborted. Results already
+	 * recorded are kept, so the operator can resume it later; a cell whose task
+	 * was cancelled mid-flight stays pending rather than being written down as
+	 * a failure. Resolves once the execution has actually wound down.
+	 */
+	async cancel(id: string): Promise<void> {
+		const active = this.active.get(id);
+		if (!active) return;
+		active.controller.abort();
+		await active.done;
 	}
 
 	/**
@@ -69,8 +86,9 @@ export class Orchestrator {
 	}
 
 	private launch(run: Run, settings: Record<string, unknown>): void {
-		const done = this.executeInBackground(run, settings);
-		this.active.set(run.id, { done });
+		const controller = new AbortController();
+		const done = this.executeInBackground(run, settings, controller.signal);
+		this.active.set(run.id, { controller, done });
 		void done.then(() => {
 			if (this.active.get(run.id)?.done === done) this.active.delete(run.id);
 		});
@@ -82,9 +100,13 @@ export class Orchestrator {
 	 * failure is logged and the run is left marked aborted (which the run
 	 * screen offers to resume) rather than stuck on running forever.
 	 */
-	private async executeInBackground(run: Run, settings: Record<string, unknown>): Promise<void> {
+	private async executeInBackground(
+		run: Run,
+		settings: Record<string, unknown>,
+		signal: AbortSignal
+	): Promise<void> {
 		try {
-			await this.execute(run, settings);
+			await this.execute(run, settings, signal);
 		} catch (error) {
 			console.error(`Orchestrator: run ${run.id} failed`, error);
 			run.status = 'aborted';
@@ -97,7 +119,11 @@ export class Orchestrator {
 		}
 	}
 
-	private async execute(run: Run, settings: Record<string, unknown>): Promise<void> {
+	private async execute(
+		run: Run,
+		settings: Record<string, unknown>,
+		signal: AbortSignal
+	): Promise<void> {
 		const tasks: Task<unknown>[] = [];
 
 		for (const domain of run.domains) {
@@ -112,7 +138,7 @@ export class Orchestrator {
 					key: `${domain.domain}::${id}`,
 					concurrency: analyzer.concurrency,
 					timeoutMs: analyzer.timeoutMs,
-					run: async (signal) => {
+					run: async (taskSignal) => {
 						const preflight = await analyzer.preflight(analyzerSettings);
 						if (!preflight.available) {
 							// The scheduler reports only a message string, so the prefix is
@@ -120,7 +146,7 @@ export class Orchestrator {
 							// toAnalyzerResult below turns it back into an unavailable result.
 							throw new Error(`UNAVAILABLE: ${preflight.reason}`);
 						}
-						return analyzer.analyze(domain.domain, analyzerSettings, signal);
+						return analyzer.analyze(domain.domain, analyzerSettings, taskSignal);
 					}
 				});
 			}
@@ -150,6 +176,7 @@ export class Orchestrator {
 
 		await runTasks(tasks, {
 			parallelCap: PARALLEL_CAP,
+			signal,
 			onSettled: (task, result) => {
 				queue = queue
 					.then(async () => {
@@ -183,7 +210,7 @@ export class Orchestrator {
 			}
 		});
 
-		run.status = 'complete';
+		run.status = signal.aborted ? 'aborted' : 'complete';
 		await this.storage.save(run);
 		this.onProgress(structuredClone(run));
 	}

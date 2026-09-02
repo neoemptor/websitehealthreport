@@ -78,4 +78,20 @@ describe('RunStorage', () => {
 		const entries = await fs.readdir(path.join(dir, 'runs'));
 		expect(entries).toEqual([`${run.id}.json`]);
 	});
+
+	it('rewrites interrupted running runs as aborted', async () => {
+		await storage.save(run);
+		await storage.save({ ...run, id: 'done-run', status: 'complete' });
+
+		const rewritten = await storage.markInterruptedAsAborted();
+
+		expect(rewritten).toEqual([run.id]);
+		expect((await storage.load(run.id)).status).toBe('aborted');
+		expect((await storage.load('done-run')).status).toBe('complete');
+	});
+
+	it('leaves nothing to recover when no run was interrupted', async () => {
+		await storage.save({ ...run, status: 'complete' });
+		expect(await storage.markInterruptedAsAborted()).toEqual([]);
+	});
 });

@@ -8,6 +8,9 @@
 	let exporting = false;
 	let error = '';
 
+	// Read by the PDF export to know the page has actually rendered its run.
+	$: state = error ? 'error' : run ? 'ready' : 'loading';
+
 	onMount(async () => {
 		try {
 			run = await api().loadRun($page.params.id);
@@ -28,40 +31,45 @@
 	}
 </script>
 
-{#if error}
-	<p role="alert">{error}</p>
-{:else if run}
-	<header class="no-print">
-		<button on:click={exportPdf} disabled={exporting}>
-			{exporting ? 'Exporting…' : 'Export PDF'}
-		</button>
-	</header>
+<!-- data-report-state is the PDF export's readiness signal: printToPDF used to
+     fire after a fixed sleep, which on a large run or a cold start printed the
+     "Loading…" placeholder and reported success. See electron/pdf.ts. -->
+<div data-report-state={state} data-report-error={error || null}>
+	{#if error}
+		<p role="alert">{error}</p>
+	{:else if run}
+		<header class="no-print">
+			<button on:click={exportPdf} disabled={exporting}>
+				{exporting ? 'Exporting…' : 'Export PDF'}
+			</button>
+		</header>
 
-	<h1>Website Health Report</h1>
-	<p>{run.client} — {new Date(run.createdAt).toLocaleDateString()}</p>
+		<h1>Website Health Report</h1>
+		<p>{run.client} — {new Date(run.createdAt).toLocaleDateString()}</p>
 
-	{#each run.domains as domain}
-		<section class="domain">
-			<h2>{domain.domain} <small>({domain.role})</small></h2>
+		{#each run.domains as domain}
+			<section class="domain">
+				<h2>{domain.domain} <small>({domain.role})</small></h2>
 
-			{#each run.enabledAnalyzers as id}
-				{@const result = domain.analyzers[id]}
-				<h3>{id}</h3>
-				{#if !result}
-					<p>Not run.</p>
-				{:else if result.status === 'unavailable'}
-					<p>Unavailable — {result.reason}</p>
-				{:else if result.status === 'failed'}
-					<p>Failed — {result.error}</p>
-				{:else}
-					<pre>{JSON.stringify(result.data, null, 2)}</pre>
-				{/if}
-			{/each}
-		</section>
-	{/each}
-{:else}
-	<p>Loading…</p>
-{/if}
+				{#each run.enabledAnalyzers as id}
+					{@const result = domain.analyzers[id]}
+					<h3>{id}</h3>
+					{#if !result}
+						<p>Not run.</p>
+					{:else if result.status === 'unavailable'}
+						<p>Unavailable — {result.reason}</p>
+					{:else if result.status === 'failed'}
+						<p>Failed — {result.error}</p>
+					{:else}
+						<pre>{JSON.stringify(result.data, null, 2)}</pre>
+					{/if}
+				{/each}
+			</section>
+		{/each}
+	{:else}
+		<p>Loading…</p>
+	{/if}
+</div>
 
 <style>
 	.domain {

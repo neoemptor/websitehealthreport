@@ -7,7 +7,61 @@ export type ExportOptions = {
 	/** Dev: http://localhost:5173. Packaged: file:// URL of build/index.html. */
 	rendererBase: string;
 	outPath: string;
+	/** Overridable for slow machines and tests. */
+	readyTimeoutMs?: number;
 };
+
+const READY_TIMEOUT_MS = 60_000;
+const POLL_INTERVAL_MS = 100;
+
+type ReportState = { state: string | null; error: string | null } | null;
+
+/**
+ * Waits for the report route to say it has rendered its run.
+ *
+ * This used to be a fixed 1500ms sleep, which is not synchronised with the
+ * route's async data load at all: a large run or a cold start printed the
+ * "Loading…" placeholder and reported success — the wrong document, at a
+ * plausible size, with no error anywhere. The route sets data-report-state on
+ * its root element, so readiness is now a fact rather than a guess, and a page
+ * that never becomes ready throws instead of printing a placeholder.
+ */
+async function waitForReport(
+	webContents: { executeJavaScript(code: string): Promise<unknown> },
+	runId: string,
+	timeoutMs: number
+): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+
+	for (;;) {
+		const result = (await webContents.executeJavaScript(
+			`(() => {
+				const el = document.querySelector('[data-report-state]');
+				return el
+					? { state: el.getAttribute('data-report-state'), error: el.getAttribute('data-report-error') }
+					: null;
+			})()`
+		)) as ReportState;
+
+		if (result?.state === 'ready') return;
+
+		if (result?.state === 'error') {
+			throw new Error(
+				`Report page could not load run ${runId}: ${result.error ?? 'unknown error'}`
+			);
+		}
+
+		if (Date.now() >= deadline) {
+			throw new Error(
+				`Report page for run ${runId} was still "${
+					result?.state ?? 'not rendered'
+				}" after ${timeoutMs}ms; refusing to print a placeholder.`
+			);
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+	}
+}
 
 /**
  * Renders the same /report/:id route the operator reviews on screen into a
@@ -30,8 +84,7 @@ export async function exportRunPdf(opts: ExportOptions): Promise<string> {
 
 	try {
 		await window.loadURL(`${opts.rendererBase}/report/${opts.runId}`);
-		// The route loads its run asynchronously; wait for the DOM to settle.
-		await new Promise((resolve) => setTimeout(resolve, 1500));
+		await waitForReport(window.webContents, opts.runId, opts.readyTimeoutMs ?? READY_TIMEOUT_MS);
 
 		const pdf = await window.webContents.printToPDF({
 			printBackground: true,

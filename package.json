@@ -2,6 +2,7 @@
 	"name": "websitehealthreport",
 	"version": "0.0.1",
 	"private": true,
+	"productName": "Website Health Report",
 	"description": "Website Health Report - retrieves Lighthouse and SEOQuake Information for customer and competitors and creates a PDF Report.",
 	"author": "D S Bailey Freelancer - Darren Bailey",
 	"license": "ISC",

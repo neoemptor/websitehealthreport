@@ -9,7 +9,7 @@
 A standalone desktop application, run on Windows, Linux and Mac (Apple
 Silicon), where the operator enters a client's domain plus a list of
 competitor domains, and gets back a health report — on screen and as a PDF —
-covering seven categories of analysis.
+covering nine categories of analysis.
 
 The application is a personal tool for one operator across three machines. It
 is not distributed to clients or colleagues, so external dependencies may be
@@ -63,7 +63,8 @@ PDF. Nothing else crosses the boundary.
 ```ts
 type AnalyzerId =
   | 'lighthouse' | 'keywords' | 'seoquake' | 'wayback'
-  | 'security' | 'aeo' | 'content';
+  | 'security' | 'aeo' | 'content'
+  | 'traffic-owned' | 'traffic-estimated';
 
 type AnalyzerResult =
   | { status: 'ok'; data: unknown }
@@ -83,7 +84,7 @@ interface Analyzer<TSettings = unknown> {
 
 `unavailable` and `failed` are deliberately distinct. "SEO Quake is not
 installed on this machine" is a different fact from "the scrape crashed", and
-the report must distinguish them. This is what makes seven fragile sources
+the report must distinguish them. This is what makes nine fragile sources
 survivable.
 
 `concurrency` is per-analyzer because the analyzers differ enormously. Cheap
@@ -125,10 +126,19 @@ unabbreviated timestamp remains available in `createdAt`.
 
 Settings are stored separately at `<userData>/settings.json`.
 
+**Credentials are not stored there.** The Semrush API key and the Google OAuth
+refresh tokens are encrypted with Electron's `safeStorage`, which is backed by
+the OS keychain (DPAPI on Windows, Keychain on macOS, libsecret on Linux), and
+written to `<userData>/credentials.enc`. `settings.json` holds only a flag
+recording whether a credential is present, so the settings file stays safe to
+read, copy between machines and inspect. Credentials are never sent over IPC
+to the renderer — the UI sees only whether a credential exists, and analyzers
+read them in the main process.
+
 ## Orchestration
 
 A run expands into a task queue of `domain × enabledAnalyzer` pairs. A client
-plus three competitors with all seven analyzers is 28 tasks.
+plus three competitors with all nine analyzers is 36 tasks.
 
 The scheduler honours each analyzer's `concurrency`: `serial` takes a global
 lock, `limited` runs behind a semaphore of 2, `parallel` runs freely under an
@@ -150,7 +160,7 @@ normalised to `https://cjsgaragedoors.com.au/` and validated before any
 analyzer receives it, using the URL guard currently in `FileHandler` promoted
 to shared code. Only `http:` and `https:` are accepted.
 
-## The seven analyzers
+## The nine analyzers
 
 ### Lighthouse — risk: low
 
@@ -275,6 +285,48 @@ Settings: ignore list (per client), grammar provider block above.
 Preflight: dictionary loads; if a grammar provider is configured, its endpoint
 responds.
 
+### Traffic (owned) — risk: high
+
+Real traffic for domains whose owner has granted access. Google Search Console
+provides impressions, clicks, average position and top queries; Google
+Analytics 4 provides sessions, users and engagement.
+
+This analyzer applies to the client only. Competitors do not grant access, so
+their cells report `unavailable` with the reason "no access granted". Traffic
+is therefore the one category that does not compare side by side, and the
+report must present it as client-only rather than as a comparison with missing
+data.
+
+Access is per-domain: the operator authorises each client once, and the grant
+persists until revoked. A client who has not granted access is `unavailable`,
+not `failed`.
+
+This is the most complex integration in the project — more than SEO Quake —
+because it is the only one requiring OAuth and stored credentials.
+
+Settings: per-domain authorisation state; which of GSC and GA4 to query; GA4
+property id per domain.
+Preflight: a valid, refreshable token exists for this domain.
+
+### Traffic (estimated) — risk: medium
+
+Modelled traffic estimates from the Semrush Analytics API, covering client and
+competitors alike. This is what keeps the traffic comparison intact: the
+numbers are estimates rather than measurements, but they are derived the same
+way for every domain, so they compare meaningfully even though they are not
+accurate in absolute terms.
+
+Semrush overlaps with what SEO Quake currently scrapes — rank, backlinks,
+index counts. If that overlap proves sufficient in practice, the SEO Quake
+analyzer can eventually be retired, removing the project's most fragile
+dependency. That is an outcome to watch for, not a commitment.
+
+The report must label these numbers as estimates wherever they appear
+alongside owned traffic, so the two are never read as equivalent.
+
+Settings: Semrush API key, database/region.
+Preflight: API key present and accepted; remaining API units above zero.
+
 ## Screens
 
 **Setup** — client domain, competitor list, per-analyzer enable toggles.
@@ -282,7 +334,7 @@ Starts a run.
 
 **Run** — a live grid of domains against analyzers, one cell per task, filling
 in as tasks settle. Cells distinguish `ok`, `unavailable` and `failed`,
-because with seven fragile sources the most common question is why a cell is
+because with nine fragile sources the most common question is why a cell is
 empty. Results are readable as they land. Supports cancel and, for an aborted
 run, resume.
 
@@ -375,7 +427,20 @@ Work that changes existing code rather than adding to it:
 - **Content analysis is the least certain component.** Spelling will produce
   false positives until ignore lists mature. Grammar depends on an external
   service by construction.
-- **Scope is large.** Foundation plus seven analyzers, plus an Electron
+- **Traffic does not compare.** Owned traffic exists only for the client;
+  competitors can only ever be estimates. The report must make the difference
+  visible rather than presenting a column with holes in it. This is a
+  presentation risk more than a technical one, and it is the easiest thing in
+  the project to get subtly wrong in front of a client.
+- **Two analyzers now cost money and can stop working for billing reasons.**
+  Semrush API units run out; a lapsed subscription turns `traffic-estimated`
+  and any Semrush-derived comparison into `unavailable` mid-report. Preflight
+  checking remaining units matters for exactly this reason.
+- **OAuth is the only stored-credential surface in the project.** Refresh
+  tokens for client Google accounts are long-lived and sensitive. They are
+  encrypted at rest via `safeStorage` and never cross into the renderer, but
+  they remain the most security-relevant data the application holds.
+- **Scope is large.** Foundation plus nine analyzers, plus an Electron
   migration touching every existing file. The implementation plan should
-  sequence analyzers so the application is usable before all seven land, even
-  though all seven are in scope.
+  sequence analyzers so the application is usable before all nine land, even
+  though all nine are in scope.

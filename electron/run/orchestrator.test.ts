@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -189,5 +189,85 @@ describe('Orchestrator', () => {
     const resumed = await orchestrator.resume(first.id, {});
     expect(resumed.domains[0].analyzers.keywords?.status).toBe('ok');
     expect(keywordRuns).toBe(2);
+  });
+
+  it('does not lose a result when storage.save fails partway through', async () => {
+    const progressCalls: Run[] = [];
+    const orchestrator = new Orchestrator(
+      createRegistry([analyzer('keywords'), analyzer('wayback'), analyzer('security')]),
+      storage,
+      (run) => progressCalls.push(structuredClone(run))
+    );
+
+    // Make the second save call blow up, simulating a transient disk error.
+    // A naive unguarded promise chain would let this rejection poison every
+    // task queued after it, silently dropping their results.
+    const originalSave = storage.save.bind(storage);
+    let saveCalls = 0;
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    storage.save = async (run) => {
+      saveCalls++;
+      if (saveCalls === 2) {
+        throw new Error('disk full');
+      }
+      return originalSave(run);
+    };
+
+    const run = await orchestrator.start({
+      client: 'https://client.com/',
+      competitors: [],
+      enabledAnalyzers: ['keywords', 'wayback', 'security'],
+      settings: {}
+    });
+
+    errorSpy.mockRestore();
+
+    // The induced failure actually happened.
+    expect(saveCalls).toBeGreaterThanOrEqual(2);
+
+    // Every analyzer still has a recorded result on the in-memory run, even
+    // though its corresponding save may have failed.
+    expect(run.domains[0].analyzers.keywords?.status).toBe('ok');
+    expect(run.domains[0].analyzers.wayback?.status).toBe('ok');
+    expect(run.domains[0].analyzers.security?.status).toBe('ok');
+
+    // onProgress kept firing for tasks that settled after the failing save:
+    // a poisoned queue would have stalled and never reached a count of 3.
+    const counts = progressCalls.map((r) =>
+      r.domains.reduce((n, d) => n + Object.keys(d.analyzers).length, 0)
+    );
+    expect(Math.max(...counts)).toBe(3);
+  });
+
+  it('runs parallel analyzers concurrently, not serialized through the progress queue', async () => {
+    const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const slow = (id: string) =>
+      analyzer(id, {
+        analyze: async () => {
+          await sleep(50);
+          return { ran: id };
+        }
+      });
+
+    const orchestrator = new Orchestrator(
+      createRegistry([slow('keywords'), slow('wayback'), slow('security')]),
+      storage,
+      () => {}
+    );
+
+    const started = Date.now();
+    await orchestrator.start({
+      client: 'https://client.com/',
+      competitors: [],
+      enabledAnalyzers: ['keywords', 'wayback', 'security'],
+      settings: {}
+    });
+    const elapsed = Date.now() - started;
+
+    // Three serialized 50ms tasks would take ~150ms. Running them
+    // concurrently should finish well under that even with generous
+    // scheduling overhead; this guards against the progress queue
+    // accidentally serializing task execution itself.
+    expect(elapsed).toBeLessThan(120);
   });
 });

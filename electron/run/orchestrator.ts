@@ -75,14 +75,26 @@ export class Orchestrator {
       }
     }
 
-    // Concurrent tasks can settle within the same microtask window (e.g. two
-    // near-instant analyzers on the same domain). Without serializing this
-    // critical section, a second task's mutation can land before the first
-    // task's onProgress snapshot is taken, collapsing "one done" into "two
-    // done" and hiding the incremental progress the tests (and the UI) rely
-    // on. Chaining onSettled calls through a single promise queue forces
-    // mutate -> save -> onProgress to complete for one task before the next
-    // one begins.
+    // Tasks themselves still run concurrently (the scheduler's own
+    // concurrency gates are untouched); only the recording of each result is
+    // serialized. Concurrent tasks can settle within the same microtask
+    // window (e.g. two near-instant analyzers on the same domain), and
+    // without serializing this critical section a second task's mutation can
+    // land before the first task's onProgress snapshot is taken, collapsing
+    // "one done" into "two done" and hiding the incremental progress the
+    // tests (and the UI) rely on. Chaining onSettled calls through a single
+    // promise queue forces mutate -> save -> onProgress to complete for one
+    // task before the next one begins recording.
+    //
+    // Each link is isolated with its own try/catch and the queue is advanced
+    // past a rejected link via .catch(): a naive `queue = queue.then(fn)`
+    // would let one rejection poison every later link permanently (a save
+    // failure for task 2 would silently discard tasks 3..N forever), which
+    // is strictly worse than not serializing at all. The in-memory mutation
+    // happens unconditionally before the save is attempted, so a storage
+    // failure loses only the durable copy for that one settle (the next
+    // successful save, including the final one, catches it back up) and
+    // never the result itself.
     let queue: Promise<void> = Promise.resolve();
 
     await runTasks(tasks, {
@@ -95,8 +107,24 @@ export class Orchestrator {
 
           domain.analyzers[analyzerId] = toAnalyzerResult(result);
 
-          await this.storage.save(run);
+          try {
+            await this.storage.save(run);
+          } catch (error) {
+            // Surfaced, not swallowed: the result is still recorded in memory
+            // and onProgress still fires below, but the failure to persist it
+            // durably needs to be visible somewhere rather than silently
+            // discarded.
+            console.error(
+              `Orchestrator: failed to save run ${run.id} after ${task.key} settled`,
+              error
+            );
+          }
+
           this.onProgress(structuredClone(run));
+        }).catch((error) => {
+          // Belt-and-braces: even an error we didn't anticipate above must
+          // not propagate into `queue` and block every task queued after it.
+          console.error(`Orchestrator: unexpected error processing ${task.key}`, error);
         });
         return queue;
       }

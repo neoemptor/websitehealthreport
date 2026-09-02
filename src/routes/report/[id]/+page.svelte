@@ -6,9 +6,14 @@
 
 	let run: Run | null = null;
 	let exporting = false;
+	let error = '';
 
 	onMount(async () => {
-		run = await api().loadRun($page.params.id);
+		try {
+			run = await api().loadRun($page.params.id);
+		} catch (e) {
+			error = (e as Error).message;
+		}
 	});
 
 	async function exportPdf() {
@@ -23,7 +28,9 @@
 	}
 </script>
 
-{#if run}
+{#if error}
+	<p role="alert">{error}</p>
+{:else if run}
 	<header class="no-print">
 		<button on:click={exportPdf} disabled={exporting}>
 			{exporting ? 'Exporting…' : 'Export PDF'}

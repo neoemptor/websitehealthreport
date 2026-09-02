@@ -1,4 +1,5 @@
 import { ipcMain, type BrowserWindow } from 'electron';
+import * as path from 'path';
 import { buildHandlers, type Logger } from './handlers';
 
 export type { Logger };
@@ -7,6 +8,9 @@ export function registerIpc(deps: {
   userDataDir: string;
   window: BrowserWindow;
   logger: Logger;
+  /** Origin the renderer is served from — see server.ts for why the PDF
+   *  export window needs a real HTTP origin rather than a file:// path. */
+  rendererBase: string;
 }): void {
   const handlers = buildHandlers({
     userDataDir: deps.userDataDir,
@@ -32,4 +36,19 @@ export function registerIpc(deps: {
   ipcMain.handle('run:load', wrap('run:load', handlers.loadRun));
   ipcMain.handle('settings:read', wrap('settings:read', handlers.readSettings));
   ipcMain.handle('settings:write', wrap('settings:write', handlers.writeSettings));
+
+  ipcMain.handle(
+    'pdf:export',
+    wrap('pdf:export', async (runId: string) => {
+      const { exportRunPdf } = await import('./pdf');
+
+      // Renders the same /report/:id route the operator reviews on screen,
+      // over the same origin the main window uses (see main.ts / server.ts).
+      return exportRunPdf({
+        runId,
+        rendererBase: deps.rendererBase,
+        outPath: path.join(deps.userDataDir, 'reports', `${runId}.pdf`)
+      });
+    })
+  );
 }

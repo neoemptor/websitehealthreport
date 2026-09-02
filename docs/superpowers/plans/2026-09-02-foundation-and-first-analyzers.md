@@ -484,6 +484,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Run } from '../../src/lib/shared/types';
 
+// The temp path must be unique per call, not per process. The orchestrator
+// saves from up to 8 concurrent tasks against the same run id, so a pid-only
+// suffix would let one call's write clobber another's temp file before its
+// rename — defeating the whole point of writing to a temp file.
+let tempCounter = 0;
+const nextTempId = (): number => ++tempCounter;
+
 export class RunStorage {
   private readonly runsDir: string;
 
@@ -497,7 +504,7 @@ export class RunStorage {
     // Write to a temporary file and rename. Rename is atomic on all three
     // target platforms, so an interrupted write cannot leave a partial run.
     const target = path.join(this.runsDir, `${run.id}.json`);
-    const temp = `${target}.${process.pid}.tmp`;
+    const temp = `${target}.${process.pid}.${nextTempId()}.tmp`;
 
     await fs.writeFile(temp, JSON.stringify(run, null, 2), 'utf-8');
     await fs.rename(temp, target);

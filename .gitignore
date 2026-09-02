@@ -8,3 +8,7 @@ node_modules
 !.env.example
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Compiled output — source under src/lib is TypeScript only
+src/lib/**/*.js
+src/lib/**/*.js.map

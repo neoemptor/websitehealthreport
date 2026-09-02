@@ -365,7 +365,11 @@ describe('Orchestrator', () => {
 
 	it('marks the run aborted instead of becoming an unhandled rejection', async () => {
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const orchestrator = new Orchestrator(createRegistry([analyzer('keywords')]), storage, () => {});
+		const orchestrator = new Orchestrator(
+			createRegistry([analyzer('keywords')]),
+			storage,
+			() => {}
+		);
 
 		// No analyzer is registered under this id, so execute() throws while
 		// building tasks — the failure mode that has no caller to reject to.

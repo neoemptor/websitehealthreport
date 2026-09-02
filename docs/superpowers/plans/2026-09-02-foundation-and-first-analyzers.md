@@ -1211,17 +1211,46 @@ export class Orchestrator {
       }
     }
 
+    // The record/save/notify section is serialised through a single promise
+    // chain. Without this, two fast concurrent analyzers on the same domain
+    // both mutate `run` before either onProgress fires, and the caller sees
+    // snapshots like [2,2,2] instead of [1,2]. Only this critical section is
+    // serialised — the analyzer tasks themselves still run concurrently.
+    //
+    // Each link catches its own errors. A bare `queue = queue.then(fn)` is
+    // poisoned permanently by the first rejection: one storage failure would
+    // silently drop every result that settles afterwards.
+    let queue: Promise<void> = Promise.resolve();
+
     await runTasks(tasks, {
       parallelCap: PARALLEL_CAP,
-      onSettled: async (task, result) => {
-        const [domainName, analyzerId] = task.key.split('::') as [string, AnalyzerId];
-        const domain = run.domains.find((d) => d.domain === domainName);
-        if (!domain) return;
+      onSettled: (task, result) => {
+        queue = queue
+          .then(async () => {
+            const [domainName, analyzerId] = task.key.split('::') as [string, AnalyzerId];
+            const domain = run.domains.find((d) => d.domain === domainName);
+            if (!domain) return;
 
-        domain.analyzers[analyzerId] = toAnalyzerResult(result);
+            // Recorded in memory first: losing the durable copy is
+            // survivable, losing the result is not.
+            domain.analyzers[analyzerId] = toAnalyzerResult(result);
 
-        await this.storage.save(run);
-        this.onProgress(structuredClone(run));
+            try {
+              await this.storage.save(run);
+            } catch (error) {
+              console.error(
+                `Orchestrator: failed to save run ${run.id} after ${task.key} settled`,
+                error
+              );
+            }
+
+            this.onProgress(structuredClone(run));
+          })
+          .catch((error) => {
+            console.error(`Orchestrator: unexpected error processing ${task.key}`, error);
+          });
+
+        return queue;
       }
     });
 

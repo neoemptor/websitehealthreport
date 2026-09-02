@@ -54,4 +54,41 @@ describe('buildHandlers', () => {
 		await handlers.startRun({ client: 'example.com', competitors: [], enabledAnalyzers: [] });
 		expect(await handlers.listRuns()).toHaveLength(1);
 	});
+
+	it('drops a competitor that is another spelling of the client', async () => {
+		const handlers = buildHandlers({
+			userDataDir: dir,
+			emitProgress: () => {},
+			logger: { info: () => {}, error: () => {} }
+		});
+
+		const run = await handlers.startRun({
+			client: 'cjsgaragedoors.com.au',
+			competitors: ['https://cjsgaragedoors.com.au/', 'rival.com'],
+			enabledAnalyzers: []
+		});
+
+		// Two rows for one domain would collide: the client row wins.
+		expect(run.competitors).toEqual(['https://rival.com/']);
+		expect(run.domains.map((d) => d.domain)).toEqual([
+			'https://cjsgaragedoors.com.au/',
+			'https://rival.com/'
+		]);
+	});
+
+	it('collapses a competitor listed twice', async () => {
+		const handlers = buildHandlers({
+			userDataDir: dir,
+			emitProgress: () => {},
+			logger: { info: () => {}, error: () => {} }
+		});
+
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: ['rival.com', 'https://rival.com/', 'RIVAL.com'],
+			enabledAnalyzers: []
+		});
+
+		expect(run.competitors).toEqual(['https://rival.com/']);
+	});
 });

@@ -515,4 +515,26 @@ describe('Orchestrator', () => {
 		);
 		await expect(orchestrator.cancel('2026-01-01T000000-nothing')).resolves.toBeUndefined();
 	});
+
+	it('records a result on every row even when two rows hold the same domain', async () => {
+		// The handler dedupes, but the recording path must be correct on its own
+		// terms: keyed by domain name, both rows' results land on the first
+		// match and the second row never reports at all.
+		const orchestrator = new Orchestrator(
+			createRegistry([analyzer('keywords')]),
+			storage,
+			() => {}
+		);
+
+		const run = await finish(orchestrator, {
+			client: 'https://client.com/',
+			competitors: ['https://client.com/'],
+			enabledAnalyzers: ['keywords'],
+			settings: {}
+		});
+
+		expect(run.domains).toHaveLength(2);
+		expect(run.domains[0].analyzers.keywords?.status).toBe('ok');
+		expect(run.domains[1].analyzers.keywords?.status).toBe('ok');
+	});
 });

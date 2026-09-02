@@ -34,7 +34,18 @@ export function buildHandlers(deps: HandlerDeps) {
 		async startRun(input: StartRunInput): Promise<Run> {
 			// Normalisation happens once, here, so no analyzer ever sees raw input.
 			const client = normaliseDomain(input.client);
-			const competitors = input.competitors.map(normaliseDomain);
+
+			// Deduped after normalisation, because two spellings of one site
+			// ("cjsgaragedoors.com.au" and "https://cjsgaragedoors.com.au/")
+			// only collide once they are the same string. A competitor equal to
+			// the client is dropped rather than duplicated: the client row wins,
+			// so the same domain is never analysed twice or shown twice.
+			const competitors: string[] = [];
+			for (const raw of input.competitors) {
+				const domain = normaliseDomain(raw);
+				if (domain === client || competitors.includes(domain)) continue;
+				competitors.push(domain);
+			}
 			const settings = await settingsStore.read();
 
 			deps.logger.info('run:start', { client, competitors });

@@ -126,7 +126,7 @@ export class Orchestrator {
 	): Promise<void> {
 		const tasks: Task<unknown>[] = [];
 
-		for (const domain of run.domains) {
+		run.domains.forEach((domain, domainIndex) => {
 			for (const id of run.enabledAnalyzers) {
 				// Resume semantics: anything already ok is left alone.
 				if (domain.analyzers[id]?.status === 'ok') continue;
@@ -135,7 +135,11 @@ export class Orchestrator {
 				const analyzerSettings = settings[id] ?? analyzer.defaultSettings;
 
 				tasks.push({
-					key: `${domain.domain}::${id}`,
+					// Keyed by row index, not by domain name: two rows can hold
+					// the same domain, and a name lookup would record both of
+					// their results onto whichever row matched first, leaving
+					// the other empty forever.
+					key: `${domainIndex}::${id}`,
 					concurrency: analyzer.concurrency,
 					timeoutMs: analyzer.timeoutMs,
 					run: async (taskSignal) => {
@@ -150,7 +154,7 @@ export class Orchestrator {
 					}
 				});
 			}
-		}
+		});
 
 		// Tasks themselves still run concurrently (the scheduler's own
 		// concurrency gates are untouched); only the recording of each result is
@@ -180,8 +184,8 @@ export class Orchestrator {
 			onSettled: (task, result) => {
 				queue = queue
 					.then(async () => {
-						const [domainName, analyzerId] = task.key.split('::') as [string, AnalyzerId];
-						const domain = run.domains.find((d) => d.domain === domainName);
+						const [index, analyzerId] = task.key.split('::') as [string, AnalyzerId];
+						const domain = run.domains[Number(index)];
 						if (!domain) return;
 
 						domain.analyzers[analyzerId] = toAnalyzerResult(result);

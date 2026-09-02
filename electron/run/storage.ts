@@ -2,6 +2,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Run } from '../../src/lib/shared/types';
 
+let tempIdCounter = 0;
+function nextTempId(): number {
+  return ++tempIdCounter;
+}
+
 export class RunStorage {
   private readonly runsDir: string;
 
@@ -14,8 +19,10 @@ export class RunStorage {
 
     // Write to a temporary file and rename. Rename is atomic on all three
     // target platforms, so an interrupted write cannot leave a partial run.
+    // Each call gets a unique temp filename to prevent collisions from
+    // concurrent saves of the same run id.
     const target = path.join(this.runsDir, `${run.id}.json`);
-    const temp = `${target}.${process.pid}.tmp`;
+    const temp = `${target}.${process.pid}.${nextTempId()}.tmp`;
 
     await fs.writeFile(temp, JSON.stringify(run, null, 2), 'utf-8');
     await fs.rename(temp, target);

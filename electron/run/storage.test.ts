@@ -61,4 +61,23 @@ describe('RunStorage', () => {
   it('throws a clear error when loading a missing run', async () => {
     await expect(storage.load('nope')).rejects.toThrow(/nope/);
   });
+
+  it('handles concurrent saves of the same run without colliding', async () => {
+    const statuses: Array<'running' | 'complete' | 'failed'> = ['running', 'complete', 'failed'];
+    const saves = statuses.map((status) =>
+      storage.save({ ...run, status })
+    );
+    await Promise.all(saves);
+
+    // Load the run and verify it is a valid, complete object with one of the expected statuses
+    const loaded = await storage.load(run.id);
+    expect(loaded).toBeDefined();
+    expect(typeof loaded === 'object').toBe(true);
+    expect(loaded.id).toBe(run.id);
+    expect(statuses).toContain(loaded.status);
+
+    // Verify no temporary files are left behind
+    const entries = await fs.readdir(path.join(dir, 'runs'));
+    expect(entries).toEqual([`${run.id}.json`]);
+  });
 });

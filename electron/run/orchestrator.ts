@@ -13,7 +13,12 @@ export type StartInput = {
 	settings: Record<string, unknown>;
 };
 
+type ActiveRun = { done: Promise<void> };
+
 export class Orchestrator {
+	/** In-flight executions, keyed by run id. */
+	private readonly active = new Map<string, ActiveRun>();
+
 	constructor(
 		private readonly registry: Registry,
 		private readonly storage: RunStorage,
@@ -36,17 +41,63 @@ export class Orchestrator {
 			]
 		};
 
+		// The run is persisted and returned before any analyzer starts, so the
+		// renderer can navigate to the run screen and subscribe to progress
+		// while the work is still going. Awaiting execute() here would hold the
+		// run:start IPC call open for the whole run and every progress event
+		// would be emitted to a page that has not mounted yet.
 		await this.storage.save(run);
-		return this.execute(run, input.settings);
+		this.launch(run, input.settings);
+		return structuredClone(run);
 	}
 
 	async resume(id: string, settings: Record<string, unknown>): Promise<Run> {
 		const run = await this.storage.load(id);
 		run.status = 'running';
-		return this.execute(run, settings);
+		await this.storage.save(run);
+		this.launch(run, settings);
+		return structuredClone(run);
 	}
 
-	private async execute(run: Run, settings: Record<string, unknown>): Promise<Run> {
+	/**
+	 * Resolves once the background execution for `id` has finished, or
+	 * immediately when nothing is in flight for it. Callers that need the
+	 * finished run read it back from storage.
+	 */
+	async settled(id: string): Promise<void> {
+		await this.active.get(id)?.done;
+	}
+
+	private launch(run: Run, settings: Record<string, unknown>): void {
+		const done = this.executeInBackground(run, settings);
+		this.active.set(run.id, { done });
+		void done.then(() => {
+			if (this.active.get(run.id)?.done === done) this.active.delete(run.id);
+		});
+	}
+
+	/**
+	 * Never rejects. An execution driven in the background has no caller to
+	 * reject to, and an unhandled rejection in the main process is fatal, so a
+	 * failure is logged and the run is left marked aborted (which the run
+	 * screen offers to resume) rather than stuck on running forever.
+	 */
+	private async executeInBackground(run: Run, settings: Record<string, unknown>): Promise<void> {
+		try {
+			await this.execute(run, settings);
+		} catch (error) {
+			console.error(`Orchestrator: run ${run.id} failed`, error);
+			run.status = 'aborted';
+			try {
+				await this.storage.save(run);
+			} catch (saveError) {
+				console.error(`Orchestrator: failed to save aborted run ${run.id}`, saveError);
+			}
+			this.onProgress(structuredClone(run));
+		}
+	}
+
+	private async execute(run: Run, settings: Record<string, unknown>): Promise<void> {
 		const tasks: Task<unknown>[] = [];
 
 		for (const domain of run.domains) {
@@ -135,7 +186,6 @@ export class Orchestrator {
 		run.status = 'complete';
 		await this.storage.save(run);
 		this.onProgress(structuredClone(run));
-		return run;
 	}
 }
 

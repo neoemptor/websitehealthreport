@@ -9,15 +9,22 @@
 	let unsubscribe: (() => void) | null = null;
 
 	onMount(async () => {
-		try {
-			run = await api().loadRun($page.params.id);
-		} catch (e) {
-			error = (e as Error).message;
-		}
-		// Progress events carry the whole run, so the grid is always consistent.
+		// Subscribe before the first load, not after it: the run is already
+		// executing in the main process by the time this page mounts, so an
+		// event that lands while loadRun is in flight would otherwise be
+		// dropped. Progress events carry the whole run, so the grid is always
+		// consistent, and a snapshot that arrived first is never overwritten by
+		// the staler copy read from disk.
 		unsubscribe = api().onRunProgress((incoming) => {
 			if (incoming.id === $page.params.id) run = incoming;
 		});
+
+		try {
+			const loaded = await api().loadRun($page.params.id);
+			run = run ?? loaded;
+		} catch (e) {
+			if (!run) error = (e as Error).message;
+		}
 	});
 
 	onDestroy(() => unsubscribe?.());

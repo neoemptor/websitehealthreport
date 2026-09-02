@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { Orchestrator } from './orchestrator';
+import { Orchestrator, type StartInput } from './orchestrator';
 import { RunStorage } from './storage';
+import type { Run } from '../../src/lib/shared/types';
 import { createRegistry } from '../analyzers/registry';
 import type { Analyzer } from '../analyzers/types';
 
@@ -30,6 +31,17 @@ afterEach(async () => {
 	await fs.rm(dir, { recursive: true, force: true });
 });
 
+/**
+ * start() now returns as soon as the run is persisted and drives the analyzers
+ * in the background, so a test that cares about the finished run has to wait
+ * for that background execution and read the run back.
+ */
+async function finish(orchestrator: Orchestrator, input: StartInput): Promise<Run> {
+	const started = await orchestrator.start(input);
+	await orchestrator.settled(started.id);
+	return storage.load(started.id);
+}
+
 describe('Orchestrator', () => {
 	it('runs every analyzer against every domain', async () => {
 		const orchestrator = new Orchestrator(
@@ -38,7 +50,7 @@ describe('Orchestrator', () => {
 			() => {}
 		);
 
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: ['https://rival.com/'],
 			enabledAnalyzers: ['keywords', 'wayback'],
@@ -59,7 +71,7 @@ describe('Orchestrator', () => {
 			storage,
 			() => {}
 		);
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: ['https://rival.com/'],
 			enabledAnalyzers: ['keywords'],
@@ -85,7 +97,7 @@ describe('Orchestrator', () => {
 			() => {}
 		);
 
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['seoquake'],
@@ -110,7 +122,7 @@ describe('Orchestrator', () => {
 			() => {}
 		);
 
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords'],
@@ -134,7 +146,7 @@ describe('Orchestrator', () => {
 			() => {}
 		);
 
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback'],
@@ -155,7 +167,7 @@ describe('Orchestrator', () => {
 			}
 		);
 
-		await orchestrator.start({
+		await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback'],
@@ -180,7 +192,7 @@ describe('Orchestrator', () => {
 		]);
 
 		const orchestrator = new Orchestrator(registry, storage, () => {});
-		const first = await orchestrator.start({
+		const first = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback'],
@@ -189,7 +201,11 @@ describe('Orchestrator', () => {
 		expect(first.domains[0].analyzers.keywords?.status).toBe('failed');
 
 		const resumed = await orchestrator.resume(first.id, {});
-		expect(resumed.domains[0].analyzers.keywords?.status).toBe('ok');
+		expect(resumed.status).toBe('running');
+
+		await orchestrator.settled(first.id);
+		const final = await storage.load(first.id);
+		expect(final.domains[0].analyzers.keywords?.status).toBe('ok');
 		expect(keywordRuns).toBe(2);
 	});
 
@@ -215,7 +231,7 @@ describe('Orchestrator', () => {
 			return originalSave(run);
 		};
 
-		const run = await orchestrator.start({
+		const run = await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback', 'security'],
@@ -258,7 +274,7 @@ describe('Orchestrator', () => {
 		);
 
 		const started = Date.now();
-		await orchestrator.start({
+		await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback', 'security'],
@@ -271,5 +287,97 @@ describe('Orchestrator', () => {
 		// scheduling overhead; this guards against the progress queue
 		// accidentally serializing task execution itself.
 		expect(elapsed).toBeLessThan(120);
+	});
+
+	it('returns the run before the analyzers have finished, so the grid can stream', async () => {
+		let release: () => void = () => {};
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const orchestrator = new Orchestrator(
+			createRegistry([
+				analyzer('keywords', {
+					analyze: async () => {
+						await blocked;
+						return { ran: 'keywords' };
+					}
+				})
+			]),
+			storage,
+			() => {}
+		);
+
+		const started = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['keywords'],
+			settings: {}
+		});
+
+		// Still executing: start() must not have waited for the analyzer.
+		expect(started.status).toBe('running');
+		expect(started.domains[0].analyzers.keywords).toBeUndefined();
+
+		release();
+		await orchestrator.settled(started.id);
+		expect((await storage.load(started.id)).status).toBe('complete');
+	});
+
+	it('emits progress events after start() has already returned', async () => {
+		let release: () => void = () => {};
+		const blocked = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		const afterReturn: Run[] = [];
+		let returned = false;
+		const orchestrator = new Orchestrator(
+			createRegistry([
+				analyzer('keywords', {
+					analyze: async () => {
+						await blocked;
+						return { ran: 'keywords' };
+					}
+				})
+			]),
+			storage,
+			(run) => {
+				if (returned) afterReturn.push(run);
+			}
+		);
+
+		const started = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['keywords'],
+			settings: {}
+		});
+		returned = true;
+
+		release();
+		await orchestrator.settled(started.id);
+
+		// Every event a subscriber that mounted after navigation would see.
+		expect(afterReturn.length).toBeGreaterThan(0);
+		expect(afterReturn[afterReturn.length - 1].domains[0].analyzers.keywords?.status).toBe('ok');
+	});
+
+	it('marks the run aborted instead of becoming an unhandled rejection', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const orchestrator = new Orchestrator(createRegistry([analyzer('keywords')]), storage, () => {});
+
+		// No analyzer is registered under this id, so execute() throws while
+		// building tasks — the failure mode that has no caller to reject to.
+		const started = await orchestrator.start({
+			client: 'https://client.com/',
+			competitors: [],
+			enabledAnalyzers: ['wayback'],
+			settings: {}
+		});
+		await orchestrator.settled(started.id);
+		errorSpy.mockRestore();
+
+		expect((await storage.load(started.id)).status).toBe('aborted');
 	});
 });

@@ -6,6 +6,9 @@ node_modules
 docs/
 /.svelte-kit
 /package
+
+# The operator's own scratch directory: untracked, and not ours to format.
+.superpowers
 .env
 .env.*
 !.env.example

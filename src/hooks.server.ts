@@ -8,5 +8,5 @@ const customerWebsites: string[] = [
     //   // ... add more websites here
 ];
 // LHData.extract(customerWebsites);
-// SEOQData.extractData();
+// SEOQData.extractData(customerWebsites);
 Keyword.extract(customerWebsites);

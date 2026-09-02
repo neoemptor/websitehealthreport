@@ -1,5 +1,6 @@
 
 import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -107,7 +108,7 @@ function resolveExtensionPath(): string {
 }
 
 export class SEOQData {
-  public static extractData(): void {
+  public static extractData(websites: string[]): void {
     (async () => {
 
       const browserPath = resolveChromePath();
@@ -124,9 +125,30 @@ export class SEOQData {
         slowMo: 50,
       });
 
+      try {
+        // One browser is reused across sites. Launching is expensive and this
+        // runs headed, so a window per site would be unworkable for a list.
+        for (const site of websites) {
+          try {
+            const theResult = await SEOQData.scrapeSite(browser, site);
+            console.log(`RESULT for ${site}: `, theResult);
+          } catch (error) {
+            // One unreachable site should not abandon the rest of the list.
+            console.error(`Failed to extract SEO Quake data for ${site}:`, error);
+          }
+        }
+      } finally {
+        await browser.close();
+      }
+    })().catch((error) => console.error('SEOQData.extractData failed:', error));
+  }
+
+  private static async scrapeSite(browser: Browser, site: string): Promise<string[]> {
+    const page = await browser.newPage();
+
+    try {
       // add loading delay in the following code
-      const page = await browser.newPage();
-      await page.goto('https://www.robinsonswelding.com.au/');
+      await page.goto(site);
       // Set screen size
       await page.setViewport({ width: 1920, height: 1080 });
       // Wait for some time to ensure SEO Quake data loads. Adjust as needed.
@@ -150,24 +172,23 @@ export class SEOQData {
       const elements = await page.$('#sqseobar2');
 
 
-      if (elements) {
-        const theResult = await elements.$$eval('.seoquake-params-request', (nodes) => {
-          // (Google Idx) (Backlinks) (SubDomain Backlinks) (Bing Idx) WhoIs Source (SM Rush Rank) Pinterest
-          // const theResult: string[] = ['0', '0', '0', '0', '0', '0', '0', '0'];
-          // let idx = 0;
-
-          return nodes.map((n) => {
-            if (n.textContent !== null) {
-              return n.textContent;
-            } else {
-              return '0';
-            }
-          });
-        });
-        console.log('RESULT: ', theResult);
-      } else {
-        throw new Error('Elements not found');
+      if (!elements) {
+        throw new Error(`SEO Quake toolbar (#sqseobar2) not found on ${site}`);
       }
+
+      return await elements.$$eval('.seoquake-params-request', (nodes) => {
+        // (Google Idx) (Backlinks) (SubDomain Backlinks) (Bing Idx) WhoIs Source (SM Rush Rank) Pinterest
+        // const theResult: string[] = ['0', '0', '0', '0', '0', '0', '0', '0'];
+        // let idx = 0;
+
+        return nodes.map((n) => {
+          if (n.textContent !== null) {
+            return n.textContent;
+          } else {
+            return '0';
+          }
+        });
+      });
       // const googleIndexText: string = await theResult[0];
       // const backLinksText = await result[1];
       // const subDomainLinksText = await result[2];
@@ -175,8 +196,8 @@ export class SEOQData {
       // const whoIsText = await result[4];
       // const sourceText = await result[5];
       // const pinterestCountText = await result[7];
-
-      await browser.close();
-    })().catch((error) => console.error('SEOQData.extractData failed:', error));
+    } finally {
+      await page.close();
+    }
   }
 }

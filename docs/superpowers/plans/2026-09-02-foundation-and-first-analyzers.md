@@ -170,6 +170,14 @@ export function normaliseDomain(input: string): string {
     throw new Error('Domain is empty.');
   }
 
+  // An explicit guard is required: new URL('https://--output=/etc/passwd')
+  // parses successfully, with hostname "--output=". Relying on isSafeUrl alone
+  // would let a CLI-flag-shaped value through. No real DNS label starts with
+  // a hyphen, so nothing legitimate is rejected here.
+  if (trimmed.startsWith('-')) {
+    throw new Error(`${input} is not a valid http or https URL.`);
+  }
+
   // A bare domain gets https. Anything already carrying a scheme keeps it,
   // so an explicit http:// is not silently upgraded.
   const candidate = /^[a-z][a-z0-9+.-]*:/i.test(trimmed) ? trimmed : `https://${trimmed}`;

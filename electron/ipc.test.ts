@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
-import { buildHandlers } from './ipc';
+import { buildHandlers } from './handlers';
 
 let dir: string;
 

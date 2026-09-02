@@ -28,6 +28,7 @@ describe('buildHandlers', () => {
 			enabledAnalyzers: []
 		});
 
+		await handlers.settled(run.id);
 		expect(run.client).toBe('https://example.com/');
 		expect(run.competitors).toEqual(['https://rival.com/']);
 	});
@@ -51,7 +52,12 @@ describe('buildHandlers', () => {
 			logger: { info: () => {}, error: () => {} }
 		});
 
-		await handlers.startRun({ client: 'example.com', competitors: [], enabledAnalyzers: [] });
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: [],
+			enabledAnalyzers: []
+		});
+		await handlers.settled(run.id);
 		expect(await handlers.listRuns()).toHaveLength(1);
 	});
 
@@ -67,6 +73,8 @@ describe('buildHandlers', () => {
 			competitors: ['https://cjsgaragedoors.com.au/', 'rival.com'],
 			enabledAnalyzers: []
 		});
+
+		await handlers.settled(run.id);
 
 		// Two rows for one domain would collide: the client row wins.
 		expect(run.competitors).toEqual(['https://rival.com/']);
@@ -89,6 +97,7 @@ describe('buildHandlers', () => {
 			enabledAnalyzers: []
 		});
 
+		await handlers.settled(run.id);
 		expect(run.competitors).toEqual(['https://rival.com/']);
 	});
 });

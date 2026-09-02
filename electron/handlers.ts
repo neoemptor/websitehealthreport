@@ -77,6 +77,13 @@ export function buildHandlers(deps: HandlerDeps) {
 			return ids;
 		},
 
+		/**
+		 * Resolves once the background execution of `id` has wound down. Not
+		 * exposed over IPC: it exists for callers inside the main process (and
+		 * tests) that must not race a run that is still writing its file.
+		 */
+		settled: (id: string) => orchestrator.settled(id),
+
 		listRuns: () => storage.list(),
 		loadRun: (id: string) => storage.load(id),
 		readSettings: () => settingsStore.read(),

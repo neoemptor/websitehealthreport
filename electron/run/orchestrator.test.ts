@@ -258,37 +258,37 @@ describe('Orchestrator', () => {
 	});
 
 	it('runs parallel analyzers concurrently, not serialized through the progress queue', async () => {
-		const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-		const slow = (id: string) =>
+		// Measured as overlap rather than wall-clock: a timing threshold turns
+		// a loaded machine into a failing test. Serializing task execution
+		// through the progress queue would hold this at 1.
+		let inFlight = 0;
+		let maxInFlight = 0;
+		const overlapping = (id: string) =>
 			analyzer(id, {
 				analyze: async () => {
-					await sleep(50);
+					inFlight++;
+					maxInFlight = Math.max(maxInFlight, inFlight);
+					await new Promise((resolve) => setTimeout(resolve, 20));
+					inFlight--;
 					return { ran: id };
 				}
 			});
 
 		const orchestrator = new Orchestrator(
-			createRegistry([slow('keywords'), slow('wayback'), slow('security')]),
+			createRegistry([overlapping('keywords'), overlapping('wayback'), overlapping('security')]),
 			storage,
 			() => {}
 		);
 
-		const started = Date.now();
 		await finish(orchestrator, {
 			client: 'https://client.com/',
 			competitors: [],
 			enabledAnalyzers: ['keywords', 'wayback', 'security'],
 			settings: {}
 		});
-		const elapsed = Date.now() - started;
 
-		// Three serialized 50ms tasks would take ~150ms. Running them
-		// concurrently should finish well under that even with generous
-		// scheduling overhead; this guards against the progress queue
-		// accidentally serializing task execution itself.
-		expect(elapsed).toBeLessThan(120);
+		expect(maxInFlight).toBe(3);
 	});
-
 	it('returns the run before the analyzers have finished, so the grid can stream', async () => {
 		let release: () => void = () => {};
 		const blocked = new Promise<void>((resolve) => {
@@ -418,8 +418,7 @@ describe('Orchestrator', () => {
 		});
 
 		// Let the first two tasks take their slots.
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		expect(started).toBe(2);
+		await vi.waitFor(() => expect(started).toBe(2));
 
 		const cancelled = orchestrator.cancel(run.id);
 		release();
@@ -437,11 +436,13 @@ describe('Orchestrator', () => {
 
 	it('aborts the analyzer signal when a run is cancelled', async () => {
 		let aborted = false;
+		let running = false;
 		const orchestrator = new Orchestrator(
 			createRegistry([
 				analyzer('keywords', {
 					analyze: (_domain, _settings, signal) =>
 						new Promise((resolve) => {
+							running = true;
 							signal.addEventListener('abort', () => {
 								aborted = true;
 								resolve({ ran: 'keywords' });
@@ -460,7 +461,7 @@ describe('Orchestrator', () => {
 			settings: {}
 		});
 
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await vi.waitFor(() => expect(running).toBe(true));
 		await orchestrator.cancel(run.id);
 
 		expect(aborted).toBe(true);
@@ -494,7 +495,7 @@ describe('Orchestrator', () => {
 			enabledAnalyzers: ['keywords'],
 			settings: {}
 		});
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await vi.waitFor(() => expect(calls).toBe(1));
 		const cancelled = orchestrator.cancel(run.id);
 		release();
 		await cancelled;

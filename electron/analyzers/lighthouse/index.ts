@@ -1,4 +1,5 @@
 import type { Analyzer } from '../types';
+import { once, rejectOnAbort } from '../abort';
 import { parseLighthouse } from './parse';
 
 export type LighthouseSettings = { formFactor: 'mobile' | 'desktop' };
@@ -23,25 +24,43 @@ export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 		}
 	},
 
-	async analyze(domain, settings) {
+	async analyze(domain, settings, signal) {
 		const { launch } = await import('chrome-launcher');
 		const lighthouse = (await import('lighthouse')).default;
 
+		if (signal.aborted) throw new Error('Cancelled before Chrome was launched.');
+
 		const chrome = await launch({ chromeFlags: ['--headless'] });
+		const kill = once(() => chrome.kill());
+
+		// Killed on abort, not only in the finally below. On a timeout the
+		// scheduler stops waiting for this promise and releases the slot, so a
+		// teardown that waits for Lighthouse to return may never run at all and
+		// the analyzer ends up with more Chrome instances alive than its
+		// concurrency cap allows.
+		const onAbort = () => void kill();
+		signal.addEventListener('abort', onAbort, { once: true });
+		const aborted = rejectOnAbort(signal);
+
 		try {
-			const result = await lighthouse(domain, {
-				port: chrome.port,
-				output: 'json',
-				formFactor: settings.formFactor,
-				screenEmulation: { disabled: settings.formFactor === 'desktop' }
-			});
+			const result = await Promise.race([
+				lighthouse(domain, {
+					port: chrome.port,
+					output: 'json',
+					formFactor: settings.formFactor,
+					screenEmulation: { disabled: settings.formFactor === 'desktop' }
+				}),
+				aborted.promise
+			]);
 
 			if (!result?.lhr) {
 				throw new Error('Lighthouse returned no result.');
 			}
 			return parseLighthouse(result.lhr);
 		} finally {
-			await chrome.kill();
+			aborted.dispose();
+			signal.removeEventListener('abort', onAbort);
+			await kill();
 		}
 	}
 };

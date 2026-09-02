@@ -1,5 +1,5 @@
 export enum FileType {
-    LHData = "LHData",
-    SEOQData = "SEOQData",
-    Keyword = "Keyword"
+	LHData = 'LHData',
+	SEOQData = 'SEOQData',
+	Keyword = 'Keyword'
 }

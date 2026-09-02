@@ -46,7 +46,7 @@
 
 <label>
 	Competitors, one per line
-	<textarea bind:value={competitorText} rows="4"></textarea>
+	<textarea bind:value={competitorText} rows="4" />
 </label>
 
 <fieldset>

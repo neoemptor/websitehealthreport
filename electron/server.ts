@@ -3,22 +3,22 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const MIME_TYPES: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2'
+	'.html': 'text/html; charset=utf-8',
+	'.js': 'text/javascript; charset=utf-8',
+	'.css': 'text/css; charset=utf-8',
+	'.json': 'application/json; charset=utf-8',
+	'.png': 'image/png',
+	'.jpg': 'image/jpeg',
+	'.jpeg': 'image/jpeg',
+	'.svg': 'image/svg+xml',
+	'.ico': 'image/x-icon',
+	'.woff': 'font/woff',
+	'.woff2': 'font/woff2'
 };
 
 export type StaticServer = {
-  base: string;
-  close: () => Promise<void>;
+	base: string;
+	close: () => Promise<void>;
 };
 
 /**
@@ -38,37 +38,37 @@ export type StaticServer = {
  * `location.pathname`.
  */
 export function startStaticServer(rootDir: string): Promise<StaticServer> {
-  const server = http.createServer((req, res) => {
-    const requestPath = decodeURIComponent((req.url ?? '/').split('?')[0].split('#')[0]);
-    const normalised = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, '');
-    let filePath = path.join(rootDir, normalised);
+	const server = http.createServer((req, res) => {
+		const requestPath = decodeURIComponent((req.url ?? '/').split('?')[0].split('#')[0]);
+		const normalised = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, '');
+		let filePath = path.join(rootDir, normalised);
 
-    fs.stat(filePath, (err, stats) => {
-      if (err || !stats.isFile()) {
-        filePath = path.join(rootDir, 'index.html');
-      }
-      fs.readFile(filePath, (readErr, data) => {
-        if (readErr) {
-          res.writeHead(404);
-          res.end('Not found');
-          return;
-        }
-        const ext = path.extname(filePath);
-        res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream' });
-        res.end(data);
-      });
-    });
-  });
+		fs.stat(filePath, (err, stats) => {
+			if (err || !stats.isFile()) {
+				filePath = path.join(rootDir, 'index.html');
+			}
+			fs.readFile(filePath, (readErr, data) => {
+				if (readErr) {
+					res.writeHead(404);
+					res.end('Not found');
+					return;
+				}
+				const ext = path.extname(filePath);
+				res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream' });
+				res.end(data);
+			});
+		});
+	});
 
-  return new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      const port = typeof address === 'object' && address ? address.port : 0;
-      resolve({
-        base: `http://127.0.0.1:${port}`,
-        close: () => new Promise((res) => server.close(() => res()))
-      });
-    });
-  });
+	return new Promise((resolve, reject) => {
+		server.once('error', reject);
+		server.listen(0, '127.0.0.1', () => {
+			const address = server.address();
+			const port = typeof address === 'object' && address ? address.port : 0;
+			resolve({
+				base: `http://127.0.0.1:${port}`,
+				close: () => new Promise((res) => server.close(() => res()))
+			});
+		});
+	});
 }

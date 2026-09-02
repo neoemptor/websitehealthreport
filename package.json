@@ -5,6 +5,7 @@
 	"description": "Website Health Report - retrieves Lighthouse and SEOQuake Information for customer and competitors and creates a PDF Report.",
 	"author": "D S Bailey Freelancer - Darren Bailey",
 	"license": "ISC",
+	"main": "dist-electron/electron/main.js",
 	"scripts": {
 		"dev": "vite dev",
 		"build": "vite build",
@@ -50,9 +51,26 @@
 	"build": {
 		"appId": "au.com.dsbailey.websitehealthreport",
 		"productName": "Website Health Report",
-		"files": ["dist-electron/**/*", "build/**/*", "package.json"],
-		"win": { "target": "nsis" },
-		"linux": { "target": "AppImage" },
-		"mac": { "target": "dmg", "arch": ["arm64"] }
+		"files": [
+			"dist-electron/**/*",
+			"build/**/*",
+			"package.json"
+		],
+		"win": {
+			"target": "nsis"
+		},
+		"linux": {
+			"target": "AppImage"
+		},
+		"mac": {
+			"target": [
+				{
+					"target": "dmg",
+					"arch": [
+						"arm64"
+					]
+				}
+			]
+		}
 	}
 }

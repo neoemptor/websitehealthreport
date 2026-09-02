@@ -3,35 +3,35 @@ import * as path from 'path';
 import type { AnalyzerId } from '../../src/lib/shared/types';
 
 export type Settings = {
-  enabledAnalyzers: AnalyzerId[];
-  analyzers: Partial<Record<AnalyzerId, unknown>>;
+	enabledAnalyzers: AnalyzerId[];
+	analyzers: Partial<Record<AnalyzerId, unknown>>;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
-  enabledAnalyzers: ['lighthouse', 'keywords'],
-  analyzers: {}
+	enabledAnalyzers: ['lighthouse', 'keywords'],
+	analyzers: {}
 };
 
 export class SettingsStore {
-  private readonly file: string;
+	private readonly file: string;
 
-  constructor(rootDir: string) {
-    this.file = path.join(rootDir, 'settings.json');
-  }
+	constructor(rootDir: string) {
+		this.file = path.join(rootDir, 'settings.json');
+	}
 
-  async read(): Promise<Settings> {
-    try {
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(await fs.readFile(this.file, 'utf-8')) };
-    } catch {
-      // Missing or corrupt settings must never block startup.
-      return DEFAULT_SETTINGS;
-    }
-  }
+	async read(): Promise<Settings> {
+		try {
+			return { ...DEFAULT_SETTINGS, ...JSON.parse(await fs.readFile(this.file, 'utf-8')) };
+		} catch {
+			// Missing or corrupt settings must never block startup.
+			return DEFAULT_SETTINGS;
+		}
+	}
 
-  async write(settings: Settings): Promise<void> {
-    await fs.mkdir(path.dirname(this.file), { recursive: true });
-    const temp = `${this.file}.${process.pid}.tmp`;
-    await fs.writeFile(temp, JSON.stringify(settings, null, 2), 'utf-8');
-    await fs.rename(temp, this.file);
-  }
+	async write(settings: Settings): Promise<void> {
+		await fs.mkdir(path.dirname(this.file), { recursive: true });
+		const temp = `${this.file}.${process.pid}.tmp`;
+		await fs.writeFile(temp, JSON.stringify(settings, null, 2), 'utf-8');
+		await fs.rename(temp, this.file);
+	}
 }

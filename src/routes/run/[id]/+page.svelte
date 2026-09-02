@@ -22,7 +22,11 @@
 
 	onDestroy(() => unsubscribe?.());
 
-	function cell(result: AnalyzerResult | undefined): { text: string; title: string; status: string } {
+	function cell(result: AnalyzerResult | undefined): {
+		text: string;
+		title: string;
+		status: string;
+	} {
 		if (!result) return { text: '…', title: 'Waiting', status: 'pending' };
 		if (result.status === 'ok') return { text: 'OK', title: 'Completed', status: 'ok' };
 		if (result.status === 'unavailable')

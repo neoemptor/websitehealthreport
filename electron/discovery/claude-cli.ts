@@ -88,14 +88,25 @@ function exec(
 	});
 }
 
-async function locateBinary(deps: Required<CliDeps>): Promise<string | null> {
+function isWindowsShim(path: string): boolean {
+	return /\.(cmd|bat)$/i.test(path);
+}
+
+/** A .cmd/.bat shim rejects a shell-less spawn with EINVAL on Node >= 20.12; run it through cmd.exe instead. */
+function toSpawnCommand(command: string, args: string[]): { command: string; args: string[] } {
+	if (!isWindowsShim(command)) return { command, args };
+	return { command: 'cmd.exe', args: ['/d', '/s', '/c', command, ...args] };
+}
+
+async function locateBinary(deps: Required<CliDeps>, signal?: AbortSignal): Promise<string | null> {
 	const finder = deps.platform === 'win32' ? 'where' : 'which';
 	try {
-		const exit = await exec(finder, ['claude'], { timeoutMs: 10_000 }, deps.spawn);
+		const exit = await exec(finder, ['claude'], { timeoutMs: 10_000, signal }, deps.spawn);
 		if (exit.code !== 0) return null;
 		const first = exit.stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
 		return first ? first.trim() : null;
-	} catch {
+	} catch (error) {
+		if (signal?.aborted) throw error;
 		return null;
 	}
 }
@@ -109,16 +120,19 @@ function resolveDeps(deps?: CliDeps): Required<CliDeps> {
 
 /** Locates the binary and checks its version. Reused by runClaude so the path is found once. */
 async function locateAndCheck(
-	deps: Required<CliDeps>
+	deps: Required<CliDeps>,
+	signal?: AbortSignal
 ): Promise<{ preflight: DiscoveryPreflight; binary: string | null }> {
-	const binary = await locateBinary(deps);
+	const binary = await locateBinary(deps, signal);
 	if (!binary) return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
 	try {
-		const exit = await exec(binary, ['--version'], { timeoutMs: 10_000 }, deps.spawn);
+		const { command, args } = toSpawnCommand(binary, ['--version']);
+		const exit = await exec(command, args, { timeoutMs: 10_000, signal }, deps.spawn);
 		if (exit.code !== 0)
 			return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
 		return { preflight: { available: true, version: exit.stdout.trim() }, binary };
-	} catch {
+	} catch (error) {
+		if (signal?.aborted) throw error;
 		return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
 	}
 }
@@ -144,7 +158,7 @@ export async function runClaude(
 	deps?: CliDeps
 ): Promise<unknown> {
 	const d = resolveDeps(deps);
-	const { preflight, binary } = await locateAndCheck(d);
+	const { preflight, binary } = await locateAndCheck(d, opts.signal);
 	if (!preflight.available) throw new ClaudeUnavailableError(preflight.reason);
 	if (!binary) throw new ClaudeUnavailableError(NOT_INSTALLED);
 
@@ -162,9 +176,10 @@ export async function runClaude(
 	];
 	if (opts.allowedTools.length > 0) args.push('--allowedTools', opts.allowedTools.join(','));
 
+	const { command, args: spawnArgs } = toSpawnCommand(binary, args);
 	const exit = await exec(
-		binary,
-		args,
+		command,
+		spawnArgs,
 		{ cwd: opts.cwd, stdin: opts.prompt, timeoutMs: opts.timeoutMs, signal: opts.signal },
 		d.spawn
 	);

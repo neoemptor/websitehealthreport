@@ -4,7 +4,17 @@
 	import { api } from '$lib/api';
 	import type { AnalyzerId } from '$lib/shared/types';
 	import type { DiscoveryPreflight, DiscoveryResult } from '$lib/shared/discovery';
+	import { DEFAULT_DISCOVERY_SETTINGS } from '$lib/shared/discovery';
 	import type { Settings } from '../../electron/settings/store';
+
+	// electron/settings/store.ts pulls in node's fs/path, so its DEFAULT_SETTINGS
+	// cannot be imported as a value here; the renderer-safe shape is inlined
+	// (matching that module's DEFAULT_SETTINGS) instead.
+	const DEFAULT_SETTINGS_SHAPE: Settings = {
+		enabledAnalyzers: ['lighthouse', 'keywords'],
+		analyzers: {},
+		discovery: DEFAULT_DISCOVERY_SETTINGS
+	};
 
 	let client = '';
 	let competitorText = '';
@@ -51,8 +61,10 @@
 	});
 
 	async function rememberDiscovery() {
-		if (!settings) return;
-		settings = { ...settings, discovery: { readSite, webSearch, hint } };
+		settings = {
+			...(settings ?? DEFAULT_SETTINGS_SHAPE),
+			discovery: { readSite, webSearch, hint }
+		};
 		try {
 			await api().writeSettings(settings);
 		} catch {

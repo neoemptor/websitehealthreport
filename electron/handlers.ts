@@ -118,7 +118,7 @@ export function buildHandlers(deps: HandlerDeps) {
 					deps.logger.error('discovery:failed', error.detail);
 					return { status: 'failed', error: error.message };
 				}
-				const message = (error as Error).message;
+				const message = error instanceof Error ? error.message : String(error);
 				if (/^Aborted/.test(message)) return { status: 'cancelled' };
 				return { status: 'failed', error: message };
 			} finally {

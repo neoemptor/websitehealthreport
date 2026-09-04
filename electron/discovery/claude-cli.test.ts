@@ -102,6 +102,7 @@ describe('findClaude', () => {
 	});
 });
 
+// locate ('where'/'which'), --version, then the print run: tests below index the print spawn as calls[2].
 const baseOpts = {
 	prompt: 'hello',
 	systemAppend: 'sys',
@@ -236,6 +237,36 @@ describe('runClaude', () => {
 			{ spawn, platform: 'win32' }
 		);
 		expect(result).toEqual({ ok: true });
+	});
+
+	it('rejects immediately when aborted before the locate step runs, without spawning the print run', async () => {
+		const { spawn, calls } = fakeSpawn({
+			run: (c, a) => locate(c, a) ?? { stdout: envelope({ ok: true }), code: 0 }
+		});
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			runClaude({ ...baseOpts, signal: controller.signal }, { spawn, platform: 'win32' })
+		).rejects.toThrow(/Aborted/);
+		expect(calls.length).toBe(0);
+	});
+
+	it('spawns a .cmd binary through cmd.exe without a shell', async () => {
+		const { spawn, calls } = fakeSpawn({
+			run: (c, a) => {
+				if (c === 'where') return { stdout: 'C:\\x\\claude.cmd\n', code: 0 };
+				if (a[0] === '--version' || (a.includes('--version') && c === 'cmd.exe'))
+					return { stdout: '2.1.237\n', code: 0 };
+				return { stdout: envelope({ ok: true }), code: 0 };
+			}
+		});
+		await runClaude(
+			{ ...baseOpts, signal: new AbortController().signal },
+			{ spawn, platform: 'win32' }
+		);
+		const printCall = calls[2];
+		expect(printCall.command).toBe('cmd.exe');
+		expect(printCall.args.slice(0, 4)).toEqual(['/d', '/s', '/c', 'C:\\x\\claude.cmd']);
 	});
 
 	it('kills the child and rejects on timeout', async () => {

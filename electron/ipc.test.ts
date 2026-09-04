@@ -172,6 +172,19 @@ describe('discovery handlers', () => {
 		});
 	});
 
+	it('reports a non-Error throw by its own text', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					// eslint-disable-next-line @typescript-eslint/no-throw-literal
+					throw 'boom';
+				}
+			}
+		});
+		expect(await handlers.suggestCompetitors(input)).toEqual({ status: 'failed', error: 'boom' });
+	});
+
 	it('cancels the in-flight request, and a new request replaces the old one', async () => {
 		const seen: AbortSignal[] = [];
 		const handlers = buildHandlers({

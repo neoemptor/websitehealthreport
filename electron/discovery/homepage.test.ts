@@ -67,6 +67,44 @@ describe('fetchHomepage', () => {
 		).rejects.toThrow(/503/);
 	});
 
+	it('follows up to three redirects', async () => {
+		let n = 0;
+		const spy = (async () => {
+			n++;
+			if (n <= 3)
+				return new Response('', { status: 302, headers: { location: 'https://example.com/next' } });
+			return new Response('<p>done</p>', {
+				status: 200,
+				headers: { 'content-type': 'text/html' }
+			});
+		}) as unknown as typeof fetch;
+		const out = await fetchHomepage('https://example.com/', new AbortController().signal, spy);
+		expect(out.text).toBe('done');
+		expect(n).toBe(4);
+	});
+
+	it('rejects a fourth redirect', async () => {
+		const spy = (async () =>
+			new Response('', {
+				status: 302,
+				headers: { location: 'https://example.com/next' }
+			})) as unknown as typeof fetch;
+		await expect(
+			fetchHomepage('https://example.com/', new AbortController().signal, spy)
+		).rejects.toThrow(/redirected too many times/);
+	});
+
+	it('caps the response body at roughly 1 MB', async () => {
+		const big = 'a'.repeat(1_500_000);
+		const spy = (async () =>
+			new Response(big, {
+				status: 200,
+				headers: { 'content-type': 'text/html' }
+			})) as unknown as typeof fetch;
+		const out = await fetchHomepage('https://example.com/', new AbortController().signal, spy);
+		expect(out.text.length).toBeLessThanOrEqual(6_000);
+	});
+
 	it('sends an HTML accept header and a descriptive user agent', async () => {
 		let init: RequestInit | undefined;
 		const spy = (async (_url: unknown, i?: RequestInit) => {

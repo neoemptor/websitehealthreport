@@ -5,6 +5,8 @@ export type TlsInfo = {
 	validTo: string | null;
 	daysRemaining: number | null;
 	issuer: string | null;
+	authorized: boolean;
+	authorizationError: string | null;
 };
 
 function normalizeIssuer(value: string | string[] | undefined): string | null {
@@ -24,6 +26,11 @@ export function daysUntil(expiry: string, now: Date): number {
  * Opens a single passive TLS handshake to port 443 with SNI, reads the
  * presented certificate and negotiated protocol, then closes the socket.
  * No cipher enumeration, no retries with weaker settings, no other ports.
+ *
+ * Connects with rejectUnauthorized: false so an expired, self-signed, or
+ * mismatched certificate still completes the handshake and can be reported
+ * on rather than surfacing as a connection failure. Nothing from the
+ * connection is trusted or reused beyond this one passive read.
  */
 export function inspectTls(hostname: string, signal?: AbortSignal): Promise<TlsInfo> {
 	return new Promise((resolve, reject) => {
@@ -32,18 +39,37 @@ export function inspectTls(hostname: string, signal?: AbortSignal): Promise<TlsI
 			return;
 		}
 
-		const socket = tls.connect({ host: hostname, port: 443, servername: hostname }, () => {
-			const cert = socket.getPeerCertificate();
-			const info: TlsInfo = {
-				protocol: socket.getProtocol(),
-				validTo: cert?.valid_to ?? null,
-				daysRemaining: cert?.valid_to ? daysUntil(cert.valid_to, new Date()) : null,
-				issuer: normalizeIssuer(cert?.issuer?.O)
-			};
-			cleanup();
-			socket.end();
-			resolve(info);
-		});
+		const socket = tls.connect(
+			{ host: hostname, port: 443, servername: hostname, rejectUnauthorized: false },
+			() => {
+				try {
+					const cert = socket.getPeerCertificate();
+					let daysRemaining: number | null = null;
+					if (cert?.valid_to) {
+						try {
+							daysRemaining = daysUntil(cert.valid_to, new Date());
+						} catch {
+							daysRemaining = null;
+						}
+					}
+					const info: TlsInfo = {
+						protocol: socket.getProtocol(),
+						validTo: cert?.valid_to ?? null,
+						daysRemaining,
+						issuer: normalizeIssuer(cert?.issuer?.O),
+						authorized: socket.authorized,
+						authorizationError: socket.authorizationError ? String(socket.authorizationError) : null
+					};
+					cleanup();
+					socket.destroy();
+					resolve(info);
+				} catch (error) {
+					cleanup();
+					socket.destroy();
+					reject(error);
+				}
+			}
+		);
 
 		const onAbort = (): void => {
 			cleanup();
@@ -64,6 +90,7 @@ export function inspectTls(hostname: string, signal?: AbortSignal): Promise<TlsI
 		});
 		socket.on('error', (error) => {
 			cleanup();
+			socket.destroy();
 			reject(error);
 		});
 	});

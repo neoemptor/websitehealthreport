@@ -100,7 +100,7 @@ inside the app before exporting. The operator wants one; nothing is built.
   |         |                                                 |
   | ------- | ----------------------------------------------- |
   | Website | `https://dsbaileyfreelancer.com.au`             |
-  | Email   | `admin@dsbaileyfreelancer.com.au`               |
+  | Email   | `sales@dsbaileyfreelancer.com.au`               |
   | Mobile  | `+61430227786` — displayed as `+61 430 227 786` |
 
 - **The dsbaileyfreelancer.com.au design guide is binding.** The app carries
@@ -117,9 +117,8 @@ inside the app before exporting. The operator wants one; nothing is built.
   minimum width with clear space equal to its height on all sides; body copy
   9.5–11pt. Green/red status feedback is permitted "sparingly", which the
   ok/failed states use.
-- **Email discrepancy, unresolved by the operator:** the guide's contact block
-  lists `sales@dsbaileyfreelancer.com.au`; the operator supplied `admin@`. The
-  operator's direct answer is used. Confirm before a client receives one.
+- **Email resolved:** the operator first supplied `admin@`, then on
+  4 September 2026 chose the guide's `sales@dsbaileyfreelancer.com.au`.
 - **Australian English throughout** all client-facing output — spelling and
   date formats. The product ships an Australian grammar checker, so its own
   copy contradicting that would undercut the thing it sells.

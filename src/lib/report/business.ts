@@ -12,7 +12,7 @@
  */
 export const BUSINESS = {
 	name: 'D S Bailey Freelancer',
-	email: 'admin@dsbaileyfreelancer.com.au',
+	email: 'sales@dsbaileyfreelancer.com.au',
 	/** Dial-safe, for tel: links. */
 	phone: '+61430227786',
 	/** Grouped the way an Australian mobile is read aloud. */

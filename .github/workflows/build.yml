@@ -27,7 +27,7 @@ jobs:
           cache: npm
 
       - name: Install
-        run: npm ci
+        run: npm install --no-audit --no-fund
         env:
           # The app downloads Puppeteer's Chromium on the user's machine when
           # a check first needs it; the installer does not bundle it.

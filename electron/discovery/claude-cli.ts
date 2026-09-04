@@ -37,6 +37,7 @@ function collect(stream: NodeJS.ReadableStream): Promise<string> {
 		let text = '';
 		stream.on('data', (chunk: Buffer | string) => (text += chunk.toString()));
 		stream.on('end', () => resolve(text));
+		stream.on('error', () => resolve(text));
 	});
 }
 
@@ -81,6 +82,7 @@ function exec(
 					finish(() => resolve({ code, stdout: out, stderr: err }))
 				)
 		);
+		child.stdin.on('error', () => {});
 		if (opts.stdin !== undefined) child.stdin.end(opts.stdin);
 		else child.stdin.end();
 	});
@@ -143,8 +145,8 @@ export async function runClaude(
 ): Promise<unknown> {
 	const d = resolveDeps(deps);
 	const { preflight, binary } = await locateAndCheck(d);
-	if (!preflight.available || !binary)
-		throw new ClaudeUnavailableError(preflight.available ? NOT_INSTALLED : preflight.reason);
+	if (!preflight.available) throw new ClaudeUnavailableError(preflight.reason);
+	if (!binary) throw new ClaudeUnavailableError(NOT_INSTALLED);
 
 	const args = [
 		'-p',

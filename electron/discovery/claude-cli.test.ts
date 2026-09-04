@@ -205,6 +205,39 @@ describe('runClaude', () => {
 		expect(killed).toEqual([2]);
 	});
 
+	it('does not crash when stdin emits an error after ending (EPIPE-style)', async () => {
+		const calls: Array<{ command: string; args: string[] }> = [];
+		const spawn: SpawnFn = (command, args) => {
+			calls.push({ command, args });
+			const stdout = new PassThrough();
+			const stderr = new PassThrough();
+			const stdin = new PassThrough();
+			const emitter = new EventEmitter();
+			const out = locate(command, args) ?? { stdout: envelope({ ok: true }), code: 0 };
+			const child: Spawned = {
+				stdout,
+				stderr,
+				stdin,
+				kill: () => setImmediate(() => emitter.emit('close', null)),
+				on: (event, listener) => emitter.on(event, listener as (...a: unknown[]) => void)
+			};
+			setImmediate(() => {
+				if (out.stdout) stdout.end(out.stdout);
+				else stdout.end();
+				if (out.stderr) stderr.end(out.stderr);
+				else stderr.end();
+				stdin.emit('error', new Error('EPIPE'));
+				if (!out.hang) emitter.emit('close', out.code);
+			});
+			return child;
+		};
+		const result = await runClaude(
+			{ ...baseOpts, signal: new AbortController().signal },
+			{ spawn, platform: 'win32' }
+		);
+		expect(result).toEqual({ ok: true });
+	});
+
 	it('kills the child and rejects on timeout', async () => {
 		const { spawn, killed } = fakeSpawn({
 			run: (c, a) => locate(c, a) ?? { hang: true, code: null }

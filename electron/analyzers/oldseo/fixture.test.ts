@@ -32,6 +32,21 @@ describe.skipIf(!chromium)('oldseo against the fixture site', () => {
 			expect(checks.has('stale')).toBe(true);
 			expect(data.findings.some((f) => f.evidence.includes('/private'))).toBe(false);
 			expect(data.findings.some((f) => f.evidence.includes('Home About Services'))).toBe(false);
+			expect(
+				data.findings.some(
+					(f) => f.check === 'hidden-link' && f.evidence.endsWith('link-farm.example/')
+				)
+			).toBe(true);
+			expect(
+				data.findings.some(
+					(f) => f.check === 'hidden-link' && f.evidence.endsWith('services-mandurah.html')
+				)
+			).toBe(false);
+			expect(
+				data.findings.some(
+					(f) => f.check === 'hidden-link' && f.evidence.endsWith('services-baldivis.html')
+				)
+			).toBe(false);
 		} finally {
 			await server.close();
 		}

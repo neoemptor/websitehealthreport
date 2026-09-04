@@ -132,65 +132,87 @@ export type RawSnapshot = Omit<PageSnapshot, 'botText' | 'path'> & { links: stri
  * `visibleText` is `visible.join('\n')`, not `visible.join(' ')`: each
  * visible text node becomes its own line, with whitespace collapsed within
  * the node. The stuffing detector's comma-list rule depends on this.
+ *
+ * Legitimate UI is exempt from every hidden reason (not just display-none):
+ * an element inside nav/header/footer chrome, or matching a menu/dropdown/
+ * drawer-style class or id, is never reported as concealment; likewise an
+ * opacity/visibility/zero-box "hidden" state on an animated element (one
+ * whose computed transition-property covers opacity, height, max-height,
+ * transform or visibility, or is "all") is treated as a closing menu rather
+ * than cloaking, and same-colour text is skipped entirely wherever a
+ * background-image sits behind it, since the checker cannot see through it.
  */
 export function snapshotScript(): (url: string) => RawSnapshot {
 	return (url: string) => {
 		const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
-		const UI_PATTERN = /menu|modal|cookie|sr-only|visually-hidden|screen-reader/i;
-		const UI_SELECTOR = 'nav,[role=navigation],[aria-hidden],dialog,[hidden]';
+		const UI_PATTERN =
+			/menu|modal|cookie|sr-only|visually-hidden|screen-reader|nav|dropdown|submenu|drawer|offcanvas|hamburger/i;
+		const UI_SELECTOR = 'nav,header,footer,[role=navigation],[aria-hidden],dialog,[hidden]';
+		const ANIMATED_PROPS = /opacity|height|max-height|transform|visibility|all/;
 
 		const rgb = (s: string): [number, number, number, number] | null => {
 			const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
 			return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : null;
 		};
 
+		const ancestors = (el: Element): Element[] => {
+			const out: Element[] = [];
+			let n: Element | null = el;
+			while (n) {
+				out.push(n);
+				n = n.parentElement;
+			}
+			return out;
+		};
+
 		const background = (el: Element): [number, number, number] => {
-			let node: Element | null = el;
-			while (node) {
+			for (const node of ancestors(el)) {
 				const c = rgb(getComputedStyle(node).backgroundColor);
 				if (c && c[3] > 0) return [c[0], c[1], c[2]];
-				node = node.parentElement;
 			}
 			return [255, 255, 255];
 		};
 
+		const hasBackgroundImage = (el: Element): boolean =>
+			ancestors(el).some((n) => getComputedStyle(n).backgroundImage !== 'none');
+
+		const isAnimated = (el: Element): boolean =>
+			ancestors(el).some((n) => ANIMATED_PROPS.test(getComputedStyle(n).transitionProperty));
+
 		const isUi = (el: Element): boolean =>
 			!!el.closest(UI_SELECTOR) ||
-			[
-				...(function* () {
-					let n: Element | null = el;
-					while (n) {
-						yield n;
-						n = n.parentElement;
-					}
-				})()
-			].some((n) => UI_PATTERN.test(n.id + ' ' + (n.getAttribute('class') ?? '')));
+			ancestors(el).some((n) => UI_PATTERN.test(n.id + ' ' + (n.getAttribute('class') ?? '')));
 
 		const hiddenReason = (el: Element, text: string): HiddenReason | null => {
+			const ui = isUi(el);
+			const animated = isAnimated(el);
 			let node: Element | null = el;
 			while (node) {
-				if (getComputedStyle(node).display === 'none') return isUi(el) ? null : 'display-none';
+				if (getComputedStyle(node).display === 'none') return ui ? null : 'display-none';
 				node = node.parentElement;
 			}
 			node = el;
 			while (node) {
-				if (getComputedStyle(node).opacity === '0') return 'opacity-zero';
+				if (getComputedStyle(node).opacity === '0') return animated || ui ? null : 'opacity-zero';
 				node = node.parentElement;
 			}
 			const cs = getComputedStyle(el);
-			if (cs.visibility === 'hidden') return 'visibility-hidden';
-			if (parseFloat(cs.fontSize) < 2) return 'tiny-font';
-			const fg = rgb(cs.color);
-			if (fg) {
-				const bg = background(el);
-				const dist = Math.abs(fg[0] - bg[0]) + Math.abs(fg[1] - bg[1]) + Math.abs(fg[2] - bg[2]);
-				if (dist < 24) return 'same-colour';
+			if (cs.visibility === 'hidden') return animated || ui ? null : 'visibility-hidden';
+			if (parseFloat(cs.fontSize) < 2) return ui ? null : 'tiny-font';
+			if (!hasBackgroundImage(el)) {
+				const fg = rgb(cs.color);
+				if (fg) {
+					const bg = background(el);
+					const dist = Math.abs(fg[0] - bg[0]) + Math.abs(fg[1] - bg[1]) + Math.abs(fg[2] - bg[2]);
+					if (dist < 24) return ui ? null : 'same-colour';
+				}
 			}
 			const box = el.getBoundingClientRect();
 			const indent = parseFloat(cs.textIndent);
 			if (box.right < -1000 || box.bottom < -1000 || (!Number.isNaN(indent) && indent < -999))
-				return isUi(el) ? null : 'off-canvas';
-			if ((box.width === 0 || box.height === 0) && text.trim()) return isUi(el) ? null : 'zero-box';
+				return ui ? null : 'off-canvas';
+			if ((box.width === 0 || box.height === 0) && text.trim())
+				return animated || ui ? null : 'zero-box';
 			return null;
 		};
 

@@ -35,8 +35,8 @@ function footerTemplate(dateLabel: string): string {
 		.join(' &middot; ');
 
 	return `
-	<div style="width:100%;margin:0 12mm;padding-top:4mm;border-top:0.5pt solid #D8D5CE;
-	            font-family:Georgia,'Times New Roman',serif;font-size:7pt;color:#6B6659;
+	<div style="width:100%;margin:0 12mm;padding-top:4mm;border-top:0.5pt solid #fdb118;
+	            font-family:Inter,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:7pt;color:#6b7280;
 	            display:flex;justify-content:space-between;gap:8mm;">
 		<span>${contact}</span>
 		<span style="white-space:nowrap;">${escapeHtml(

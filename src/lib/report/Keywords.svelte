@@ -8,19 +8,26 @@
 </script>
 
 {#if data.keywords.length === 0}
-	<p class="mt-1 text-[12px] text-[#6B6659]">
-		<span class="font-medium text-ink">No keywords declared.</span>
+	<p class="mt-1 text-[12px] text-dark-500">
+		<span class="font-medium text-dark-700">No keywords declared.</span>
 		The page has no meta keywords tag, so there is nothing to compare against its text.
 	</p>
 {:else}
-	<table class="mt-3 w-full border-collapse text-left">
+	<!-- A short list is kept whole: a four-row table broken two rows either
+	     side of a page reads as an error. A long one may still run over a
+	     page — rows never split mid-row and Chromium repeats the header. -->
+	<table
+		class="mt-3 w-full border-collapse text-left {data.keywords.length <= 8
+			? 'break-inside-avoid'
+			: ''}"
+	>
 		<thead>
-			<tr class="border-b border-rule">
-				<th class="py-1.5 pr-4 text-[10px] font-medium uppercase tracking-[0.1em] text-[#6B6659]">
+			<tr class="border-b border-dark-200">
+				<th class="py-1.5 pr-4 text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500">
 					Keyword
 				</th>
 				<th
-					class="w-32 py-1.5 text-right text-[10px] font-medium uppercase tracking-[0.1em] text-[#6B6659]"
+					class="w-32 py-1.5 text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
 				>
 					Times on page
 				</th>
@@ -28,16 +35,16 @@
 		</thead>
 		<tbody>
 			{#each ranked as row}
-				<tr class="break-inside-avoid border-b border-rule/70 last:border-0">
-					<td class="py-1.5 pr-4 font-mono text-[12px] text-ink">{row.keyword}</td>
+				<tr class="break-inside-avoid border-b border-dark-200/70 last:border-0">
+					<td class="py-1.5 pr-4 font-mono text-[12px] text-dark-700">{row.keyword}</td>
 					<td
-						class="py-1.5 text-right font-mono text-[12px] {row.count === 0
+						class="py-1.5 text-right font-mono text-[12px] tabular-nums {row.count === 0
 							? 'text-fail'
-							: 'text-ink'}"
+							: 'text-dark-700'}"
 					>
 						{row.count}
 						{#if row.count === 0}
-							<span class="ml-1 text-[10px] uppercase tracking-wide">unused</span>
+							<span class="ml-1 text-[10px] font-semibold uppercase tracking-wide">unused</span>
 						{/if}
 					</td>
 				</tr>
@@ -46,8 +53,8 @@
 	</table>
 
 	{#if unused.length > 0}
-		<p class="mt-2.5 break-inside-avoid text-[11.5px] leading-relaxed text-[#6B6659]">
-			<span class="font-medium text-ink">
+		<p class="mt-2.5 max-w-[62ch] break-inside-avoid text-[11.5px] leading-relaxed text-dark-500">
+			<span class="font-medium text-dark-700">
 				{unused.length}
 				{unused.length === 1
 					? 'keyword is targeted but never appears'

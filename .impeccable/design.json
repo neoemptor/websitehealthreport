@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-04T00:00:00.000Z",
+  "title": "Design System: Website Health Report",
+  "extensions": {
+    "colorMeta": {
+      "brand-orange": { "role": "primary", "displayName": "Brand Orange", "canonical": "#fdb118", "tonalRamp": ["#8a4a05", "#b86307", "#e67e0d", "#f7931e", "#fdb118", "#ffe033", "#ffe666", "#fff3cc"] },
+      "brand-orange-warm": { "role": "primary", "displayName": "Warm Orange", "canonical": "#f7931e", "tonalRamp": ["#8a4a05", "#b86307", "#e67e0d", "#f7931e", "#fdb118", "#ffe033", "#ffe666", "#fff3cc"] },
+      "brand-orange-pressed": { "role": "primary", "displayName": "Pressed Orange", "canonical": "#e67e0d", "tonalRamp": ["#8a4a05", "#b86307", "#e67e0d", "#f7931e", "#fdb118", "#ffe033", "#ffe666", "#fff3cc"] },
+      "brand-orange-ink": { "role": "primary", "displayName": "Orange Ink", "canonical": "#b86307", "tonalRamp": ["#8a4a05", "#b86307", "#e67e0d", "#f7931e", "#fdb118", "#ffe033", "#ffe666", "#fff3cc"] },
+      "page-black": { "role": "neutral", "displayName": "Page Black", "canonical": "#0a0a0a", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "card-black": { "role": "neutral", "displayName": "Card Black / Ink", "canonical": "#1a1a1a", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "paper-white": { "role": "neutral", "displayName": "Paper White", "canonical": "#ffffff", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#ffffff"] },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#1a1a1a", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "ink-secondary": { "role": "neutral", "displayName": "Ink Secondary", "canonical": "#4b5563", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "ink-muted": { "role": "neutral", "displayName": "Ink Muted", "canonical": "#6b7280", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "label-grey": { "role": "neutral", "displayName": "Label Grey", "canonical": "#9ca3af", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "paper-rule": { "role": "neutral", "displayName": "Paper Rule", "canonical": "#e5e7eb", "tonalRamp": ["#000000", "#0a0a0a", "#1a1a1a", "#4b5563", "#6b7280", "#9ca3af", "#e5e7eb", "#f9fafb"] },
+      "ok-print": { "role": "status", "displayName": "OK (paper)", "canonical": "#2e7d5b", "tonalRamp": ["oklch(20% 0.06 160)", "oklch(30% 0.08 160)", "oklch(40% 0.10 160)", "#2e7d5b", "oklch(60% 0.12 160)", "#4fb37f", "oklch(82% 0.09 160)", "oklch(94% 0.04 160)"] },
+      "ok-screen": { "role": "status", "displayName": "OK (screen)", "canonical": "#4fb37f", "tonalRamp": ["oklch(20% 0.06 160)", "oklch(30% 0.08 160)", "oklch(40% 0.10 160)", "#2e7d5b", "oklch(60% 0.12 160)", "#4fb37f", "oklch(82% 0.09 160)", "oklch(94% 0.04 160)"] },
+      "fail-print": { "role": "status", "displayName": "Fail (paper)", "canonical": "#b3401f", "tonalRamp": ["oklch(22% 0.08 40)", "oklch(32% 0.11 40)", "oklch(42% 0.13 40)", "#b3401f", "oklch(58% 0.16 40)", "#e0663f", "oklch(80% 0.09 40)", "oklch(94% 0.03 40)"] },
+      "fail-screen": { "role": "status", "displayName": "Fail (screen)", "canonical": "#e0663f", "tonalRamp": ["oklch(22% 0.08 40)", "oklch(32% 0.11 40)", "oklch(42% 0.13 40)", "#b3401f", "oklch(58% 0.16 40)", "#e0663f", "oklch(80% 0.09 40)", "oklch(94% 0.03 40)"] },
+      "text-on-dark": { "role": "neutral", "displayName": "White 70", "canonical": "rgba(255,255,255,0.7)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "text-on-dark-secondary": { "role": "neutral", "displayName": "White 60", "canonical": "rgba(255,255,255,0.6)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "text-on-dark-muted": { "role": "neutral", "displayName": "White 50", "canonical": "rgba(255,255,255,0.5)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "text-on-dark-disabled": { "role": "neutral", "displayName": "White 40", "canonical": "rgba(255,255,255,0.4)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "field-border": { "role": "neutral", "displayName": "White 20 (field border)", "canonical": "rgba(255,255,255,0.2)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "hairline": { "role": "neutral", "displayName": "White 10 (hairline)", "canonical": "rgba(255,255,255,0.1)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] },
+      "card-edge": { "role": "neutral", "displayName": "White 5 (card edge / hover)", "canonical": "rgba(255,255,255,0.05)", "tonalRamp": ["rgba(255,255,255,0.05)", "rgba(255,255,255,0.1)", "rgba(255,255,255,0.2)", "rgba(255,255,255,0.4)", "rgba(255,255,255,0.5)", "rgba(255,255,255,0.6)", "rgba(255,255,255,0.7)", "#ffffff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The client domain at the head of the report." },
+      "headline": { "displayName": "Headline", "purpose": "Screen page titles." },
+      "title": { "displayName": "Title", "purpose": "Each domain's heading in the report." },
+      "check-heading": { "displayName": "Check heading", "purpose": "Each check's heading on paper; the smallest orange type on white (19px = 14pt floor)." },
+      "figure": { "displayName": "Figure", "purpose": "Lighthouse scores (20px paper) and the settled/total count (26px screen); tabular, line-height 1." },
+      "body": { "displayName": "Body (screen)", "purpose": "Running copy on the dark screens." },
+      "body-paper": { "displayName": "Body (paper)", "purpose": "Findings at 12.5px, lead sentence at 13px; findings capped at 62ch. Print root is 10.5pt." },
+      "label": { "displayName": "Label", "purpose": "Uppercase field labels, table heads, chip words, run status. Paper table heads 10px/0.1em; role tags 10px/0.12em." },
+      "caption": { "displayName": "Caption / gloss", "purpose": "Plain-English gloss under every technical label; letterhead contact lines; target notes." },
+      "reading": { "displayName": "Reading (mono)", "purpose": "Measured or typed values only: domains, counts, times, dates, paths, error text. 12px on paper, 13px in fields, 14px for domains on screen." },
+      "button": { "displayName": "Button", "purpose": "Both button variants." }
+    },
+    "shadows": [
+      { "name": "paper", "value": "0 2px 24px rgba(0,0,0,0.5)", "purpose": "Under the report sheet on screen only, so it reads as paper on the dark page. Removed in print. The only shadow in the system." }
+    ],
+    "motion": [
+      { "name": "colour-change", "value": "transition: color, background-color, border-color 300ms", "purpose": "Every hover/focus/active on buttons, fields, nav links and list rows. Colour only; nothing moves." },
+      { "name": "register-fill", "value": "transition: width 500ms ease-out", "purpose": "The run progress bar filling in: the one authored motion on screen." }
+    ],
+    "breakpoints": [],
+    "print": {
+      "pageSize": "A4",
+      "pageMargin": "16mm 16mm 20mm 16mm",
+      "rootFontSize": "10.5pt",
+      "footer": "0.5pt #fdb118 rule, 4mm padding, Inter 7pt #6b7280; contact block left, run date and page n of m right"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one orange action per screen: Start run, View report, Export PDF. Black text, flat, colour-only states; disabled goes neutral.",
+      "html": "<button class=\"ds-btn-primary\">Export PDF</button> <button class=\"ds-btn-primary\" disabled>Start run</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; background: #fdb118; color: #000; border: 0; border-radius: 10px; padding: 14px 32px; font-family: Poppins, system-ui, sans-serif; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; cursor: pointer; transition: background-color 300ms; } .ds-btn-primary:hover { background: #f7931e; } .ds-btn-primary:active { background: #e67e0d; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #fdb118; } .ds-btn-primary:disabled { background: #4b5563; color: rgba(255,255,255,0.4); cursor: not-allowed; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "The secondary action beside a primary: Cancel run, Resume run, Back to run. Orange outline, fills on hover.",
+      "html": "<button class=\"ds-btn-quiet\">Back to run</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: #fdb118; border: 2px solid #fdb118; border-radius: 10px; padding: 12px 30px; font-family: Poppins, system-ui, sans-serif; font-size: 15px; font-weight: 600; letter-spacing: 0.5px; cursor: pointer; transition: background-color 300ms, color 300ms; } .ds-btn-quiet:hover { background: #fdb118; color: #000; } .ds-btn-quiet:focus-visible { outline: none; box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #fdb118; } .ds-btn-quiet:disabled { border-color: #4b5563; color: rgba(255,255,255,0.4); background: transparent; cursor: not-allowed; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Text input and textarea on the dark screens, with its uppercase label. Mono text because what is typed is a domain. Border turns orange on focus.",
+      "html": "<div class=\"ds-field-wrap\"><label class=\"ds-field-label\" for=\"ds-client\">Client domain</label><input id=\"ds-client\" class=\"ds-field\" placeholder=\"cjsgaragedoors.com.au\"></div>",
+      "css": ".ds-field-wrap { background: #0a0a0a; padding: 16px; } .ds-field-label { display: block; margin-bottom: 6px; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #9ca3af; } .ds-field { width: 100%; box-sizing: border-box; background: #0a0a0a; color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; padding: 12px 16px; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace; font-size: 13px; caret-color: #fdb118; transition: border-color 300ms; } .ds-field::placeholder { color: #6b7280; } .ds-field:focus { outline: none; border-color: #fdb118; }"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "nav-link",
+      "description": "The 224px left rail: brand block, then links. Active and hover are orange text with no background.",
+      "html": "<nav class=\"ds-rail\"><div class=\"ds-rail-brand\"><svg class=\"ds-rail-mark\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"2\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"15\" y=\"4\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"15\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.5\"/><path d=\"M9 7.5h6M18.5 11v3\"/></svg><div><p class=\"ds-rail-name\">D S Bailey</p><p class=\"ds-rail-sub\">Website Health Report</p></div></div><ul class=\"ds-rail-list\"><li><a class=\"ds-rail-link ds-rail-link--active\" href=\"#\">New report</a></li><li><a class=\"ds-rail-link\" href=\"#\">Runs</a></li></ul></nav>",
+      "css": ".ds-rail { width: 224px; background: #1a1a1a; border-right: 1px solid rgba(255,255,255,0.1); font-family: Inter, system-ui, sans-serif; } .ds-rail-brand { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); } .ds-rail-mark { width: 32px; height: 32px; color: #fdb118; flex-shrink: 0; } .ds-rail-name { margin: 0; font-family: Poppins, system-ui, sans-serif; font-size: 13px; font-weight: 600; color: #fff; line-height: 1.25; } .ds-rail-sub { margin: 0; font-size: 11px; color: rgba(255,255,255,0.6); line-height: 1.25; } .ds-rail-list { list-style: none; margin: 0; padding: 12px; } .ds-rail-link { display: block; padding: 8px 12px; border-radius: 8px; font-size: 14px; color: rgba(255,255,255,0.7); text-decoration: none; transition: color 300ms; } .ds-rail-link:hover { color: #fdb118; } .ds-rail-link--active { color: #fdb118; font-weight: 600; } .ds-rail-link:focus-visible { outline: none; box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 4px #fdb118; }"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Glyph + word + colour. Five authored marks as SVG masks in currentColor; the same chip on the run grid, run history and the printed report.",
+      "html": "<div class=\"ds-chip-row\"><span class=\"ds-chip ds-chip--ok\" data-mark=\"ok\">ok</span><span class=\"ds-chip ds-chip--na\" data-mark=\"na\">n/a</span><span class=\"ds-chip ds-chip--fail\" data-mark=\"fail\">failed</span><span class=\"ds-chip ds-chip--pending\" data-mark=\"pending\">waiting</span><span class=\"ds-chip ds-chip--running\" data-mark=\"running\">running</span></div>",
+      "css": ".ds-chip-row { display: flex; gap: 24px; flex-wrap: wrap; background: #0a0a0a; padding: 16px; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-family: Inter, system-ui, sans-serif; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; } .ds-chip::before { content: ''; display: inline-block; width: 11px; height: 11px; flex-shrink: 0; background: currentColor; -webkit-mask: var(--mark) center / contain no-repeat; mask: var(--mark) center / contain no-repeat; print-color-adjust: exact; -webkit-print-color-adjust: exact; } .ds-chip[data-mark='ok']::before { --mark: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3C/svg%3E\"); } .ds-chip[data-mark='na']::before { --mark: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.75' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E\"); } .ds-chip[data-mark='fail']::before { --mark: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E\"); } .ds-chip[data-mark='pending']::before { --mark: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='1.75'/%3E%3C/svg%3E\"); } .ds-chip[data-mark='running']::before { --mark: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.75' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3Cpath d='M6 2.25a3.75 3.75 0 0 1 0 7.5z'/%3E%3C/svg%3E\"); } .ds-chip--ok { color: #4fb37f; } .ds-chip--na { color: #9ca3af; } .ds-chip--fail { color: #e0663f; } .ds-chip--pending { color: rgba(255,255,255,0.4); } .ds-chip--running { color: #fdb118; }"
+    },
+    {
+      "name": "List Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The card surface on the dark screens: card black on page black, 16px radius, 5% edge, hairline-divided rows with a 5% hover wash. Used for the checks list, run history and the run grid.",
+      "html": "<div class=\"ds-card-bg\"><ul class=\"ds-card\"><li class=\"ds-card-row\"><span class=\"ds-chip ds-chip--ok\">ok</span><span class=\"ds-card-main\"><span class=\"ds-card-domain\">cjsgaragedoors.com.au</span><span class=\"ds-card-sub\">vs 2 competitors</span></span><span class=\"ds-card-meta\">03/09/2026, 10:14 am</span></li><li class=\"ds-card-row\"><span class=\"ds-chip ds-chip--fail\">aborted</span><span class=\"ds-card-main\"><span class=\"ds-card-domain\">example-doors.com.au</span></span><span class=\"ds-card-meta\">01/09/2026, 4:02 pm</span></li></ul></div>",
+      "css": ".ds-card-bg { background: #0a0a0a; padding: 16px; font-family: Inter, system-ui, sans-serif; } .ds-card { list-style: none; margin: 0; padding: 0; background: #1a1a1a; border: 1px solid rgba(255,255,255,0.05); border-radius: 16px; overflow: hidden; } .ds-card-row { display: flex; align-items: baseline; gap: 20px; padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); transition: background-color 300ms; cursor: pointer; } .ds-card-row:first-child { border-top: 0; } .ds-card-row:hover { background: rgba(255,255,255,0.05); } .ds-card-main { flex: 1; min-width: 0; } .ds-card-domain { display: block; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 14px; color: #fff; } .ds-card-sub { display: block; font-size: 12.5px; color: rgba(255,255,255,0.5); } .ds-card-meta { flex-shrink: 0; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12px; color: rgba(255,255,255,0.5); } .ds-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; } .ds-chip::before { content: ''; width: 11px; height: 11px; border-radius: 50%; background: currentColor; } .ds-chip--ok { color: #4fb37f; } .ds-chip--fail { color: #e0663f; }"
+    },
+    {
+      "name": "Severity Row",
+      "kind": "custom",
+      "refersTo": "paper",
+      "description": "The inspection's device on paper: orange-ink check heading, severity word in the right-hand result column, plain finding, then a reading row with label, gloss, figure and band word.",
+      "html": "<div class=\"ds-paper\"><div class=\"ds-sev-head\"><h3 class=\"ds-sev-title\">Lighthouse</h3><span class=\"ds-sev-word ds-sev-word--warn\">Needs work</span></div><p class=\"ds-sev-finding\">Performance scores 62 of 100 &mdash; the main content takes 4.1s to appear (target under 2.5s).</p><table class=\"ds-readings\"><tr><td><span class=\"ds-reading-label\">Performance</span><span class=\"ds-reading-gloss\">How quickly the page loads and responds</span></td><td class=\"ds-reading-figure ds-reading-figure--warn\">62</td><td class=\"ds-reading-band\"><span class=\"ds-band-word\">Needs work</span><span class=\"ds-band-note\">out of 100</span></td></tr><tr><td><span class=\"ds-reading-label\">Largest Contentful Paint</span><span class=\"ds-reading-gloss\">Time until the main content appears</span></td><td class=\"ds-reading-value\">4.1s</td><td class=\"ds-reading-band\"><span class=\"ds-band-word ds-band-word--fail\">Over</span><span class=\"ds-band-note\">target under 2.5s</span></td></tr></table></div>",
+      "css": ".ds-paper { background: #fff; color: #1a1a1a; padding: 24px 32px; font-family: Inter, system-ui, sans-serif; box-shadow: 0 2px 24px rgba(0,0,0,0.5); } .ds-sev-head { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; } .ds-sev-title { margin: 0; font-family: Poppins, system-ui, sans-serif; font-size: 19px; font-weight: 600; color: #b86307; } .ds-sev-word { font-family: Poppins, system-ui, sans-serif; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; } .ds-sev-word--ok { color: #2e7d5b; } .ds-sev-word--warn { color: #1a1a1a; } .ds-sev-word--fail { color: #b3401f; } .ds-sev-word--na { color: #6b7280; } .ds-sev-finding { margin: 4px 0 0; max-width: 62ch; font-size: 12.5px; line-height: 1.625; color: #4b5563; } .ds-readings { width: 100%; margin-top: 12px; border-collapse: collapse; text-align: left; } .ds-readings td { padding: 8px 16px 8px 0; border-bottom: 1px solid #e5e7eb; vertical-align: middle; } .ds-readings td:last-child { padding-right: 0; width: 112px; } .ds-reading-label { display: block; font-size: 12px; color: #1a1a1a; } .ds-reading-gloss { display: block; font-size: 10.5px; color: #6b7280; } .ds-reading-figure { text-align: right; font-family: Poppins, system-ui, sans-serif; font-size: 20px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; } .ds-reading-figure--ok { color: #2e7d5b; } .ds-reading-figure--warn { color: #b86307; } .ds-reading-figure--fail { color: #b3401f; } .ds-reading-value { text-align: right; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12px; font-variant-numeric: tabular-nums; color: #1a1a1a; } .ds-reading-band { text-align: right; } .ds-band-word { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #1a1a1a; } .ds-band-word--ok { color: #2e7d5b; } .ds-band-word--fail { color: #b3401f; } .ds-band-note { display: block; font-size: 10px; color: #6b7280; }"
+    },
+    {
+      "name": "Alert",
+      "kind": "custom",
+      "refersTo": "alert",
+      "description": "Error panel on the dark screens: card surface, cross mark, mono message in fail-screen. No coloured edge stripe.",
+      "html": "<div class=\"ds-alert-bg\"><p class=\"ds-alert\" role=\"alert\">getaddrinfo ENOTFOUND third-doors.com.au</p></div>",
+      "css": ".ds-alert-bg { background: #0a0a0a; padding: 16px; } .ds-alert { display: flex; align-items: flex-start; gap: 10px; margin: 0; background: #1a1a1a; border-radius: 8px; padding: 12px 16px; font-family: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace; font-size: 12px; color: #e0663f; } .ds-alert::before { content: ''; display: inline-block; margin-top: 3px; width: 11px; height: 11px; flex-shrink: 0; background: currentColor; -webkit-mask: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E\") center / contain no-repeat; mask: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E\") center / contain no-repeat; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Inspection Report",
+    "overview": "Two registers, one identity. The tool screens are a dark instrument: page black, card black, white body at 70%, hairlines at 10% white, with brand orange kept for the active nav item, the progress bar, the one primary button and the caret. The client report is the same identity's light stationery: white stock, near-black ink, orange only on the check headings, the header rule, the logo and the status marks. The report is rendered as paper on screen too (a white sheet on the dark page, under the app's only shadow), because on screen it is a preview of a printed artefact and not a fourth tool screen.\n\nThe document reads the way a buyer reads a house inspection. Every check opens with an orange heading and a severity word in the right-hand result column, then a two-line plain-English finding, and only then the readings. Nothing on the page is other than a measurement, a name, or a gloss. Status is always a glyph plus a word plus a colour, never colour alone, because these reports are printed in black and white. Controls are the brand guide's shape, weight and tracking with none of its lift, glow or shine: flat at rest, a colour change on hover, nothing that moves.\n\nDensity is unhurried. Screen copy sits in a 224px left rail and a content column capped between 672px and 896px; the paper sheet is 820px wide with 48px side margins on screen and A4 with 16mm margins in print. Rejected outright: the SaaS dashboard (score gauges, tile grids, KPI cards), the marketing site (hero, gradient, glow), and the generic PDF export (a screen printed as-is).",
+    "keyCharacteristics": [
+      "Dark-first tool screens; the report alone is white, on screen and on paper.",
+      "Single accent: brand orange, black text on it, never body copy on white.",
+      "Poppins 600–800 for headings, figures and buttons; Inter 400–700 for everything read; the system mono stack for measured values only.",
+      "Status is glyph + word + colour; the five marks are authored SVG masks that take `currentColor`.",
+      "One right-hand result column rules the report page; no tiles, no gauges.",
+      "Flat surfaces; one authored motion (the run grid filling in)."
+    ],
+    "rules": [
+      { "name": "The Black-on-Orange Rule", "body": "Text on any orange surface is black. There is no white-on-orange anywhere in the system.", "section": "colors" },
+      { "name": "The 14pt Floor Rule", "body": "Orange type on white is `brand-orange-ink` and at least 19px (14pt). Anything smaller on paper is ink, muted ink, or a status colour; \"warn\" severity words are plain ink for exactly this reason.", "section": "colors" },
+      { "name": "The Never-Colour-Alone Rule", "body": "Every state carries a glyph and a word before it carries a colour. If a status would vanish on a greyscale print, it is not finished.", "section": "colors" },
+      { "name": "The Screen/Paper Step Rule", "body": "OK and fail each have a print step and a screen step. Use `*-print` on white, `*-screen` on black; never the reverse.", "section": "colors" },
+      { "name": "The Gloss Rule", "body": "Every technical label on paper is followed by a 10.5px muted-ink plain-English line. A label without its gloss is incomplete.", "section": "typography" },
+      { "name": "The Mono-Is-Data Rule", "body": "The mono stack is reserved for values the tool measured or the operator typed: domains, counts, times, dates, paths. It is never used for headings, labels or prose.", "section": "typography" },
+      { "name": "The No-Lift Rule", "body": "Controls change colour on hover and active; they never translate, scale, glow or gain a shadow. The brand guide's lift and shine are deliberately not carried.", "section": "elevation" },
+      { "name": "The One Shadow Rule", "body": "The only shadow is under the paper preview. Nothing on the dark screens casts one.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do put black text on every orange surface (`brand-orange` fill, `#000000` text).",
+      "Do pair every status with its authored mark and a word; set colour through the text class so the mark inherits it.",
+      "Do keep the report white on screen as well as in print, under the single `0 2px 24px rgba(0,0,0,0.5)` shadow.",
+      "Do align every reading, score, band word and severity word into the right-hand result column.",
+      "Do follow each technical label with a 10.5px plain-English gloss in `ink-muted`.",
+      "Do use `ok-print`/`fail-print` on white and `ok-screen`/`fail-screen` on black.",
+      "Do set the mono stack for domains, counts, times, dates and paths, and nothing else.",
+      "Do keep controls flat: colour changes only, 300ms.",
+      "Do keep the logo vector, at `currentColor`, no smaller than 25mm on paper with clear space equal to its height.",
+      "Do write Australian English and `en-AU` dates in anything the client reads."
+    ],
+    "donts": [
+      "Don't set orange type on white below 19px, or use `brand-orange` (rather than `brand-orange-ink`) as type on white at all.",
+      "Don't render scores as tiles, gauges, rings or KPI cards; scores are rows in the result column.",
+      "Don't add lift, glow, gradient, shine or translation to buttons, cards or links.",
+      "Don't dim the orange for a disabled state; go neutral (`ink-secondary` fill, 40% white text).",
+      "Don't signal an error with a coloured edge stripe or a red field border; use the alert panel.",
+      "Don't use a Unicode character as a status glyph; the five marks are the SVG masks in `app.css`.",
+      "Don't use orange for a \"warn\" severity word or any 10–12px band word on paper; the word is the state.",
+      "Don't let a domain heading, a check heading or a finding strand at the foot of a page, or split a table row.",
+      "Don't abbreviate \"D S Bailey Freelancer\" or vary the contact block."
+    ]
+  }
+}

@@ -40,12 +40,12 @@
 </script>
 
 <div class="max-w-2xl">
-	<h1 class="text-[20px] font-semibold text-white">New report</h1>
-	<p class="mt-1 text-[13px] text-[#8B949E]">
-		Runs every selected analyzer against the client and each competitor.
+	<h1 class="text-[28px] font-bold leading-tight">New report</h1>
+	<p class="mt-1.5 text-[14px] text-white/60">
+		Runs every selected check against the client and each competitor.
 	</p>
 
-	<div class="mt-7 space-y-6">
+	<div class="mt-8 space-y-7">
 		<div>
 			<label class="field-label" for="client">Client domain</label>
 			<input id="client" bind:value={client} class="field" placeholder="cjsgaragedoors.com.au" />
@@ -55,7 +55,7 @@
 			<label class="field-label" for="competitors">
 				Competitors
 				{#if competitorCount > 0}
-					<span class="text-accent">· {competitorCount}</span>
+					<span class="text-primary-500">· {competitorCount}</span>
 				{/if}
 			</label>
 			<textarea
@@ -68,21 +68,25 @@
 		</div>
 
 		<fieldset>
-			<legend class="field-label">Analyzers</legend>
-			<div class="divide-y divide-steel overflow-hidden rounded-sm border border-steel">
+			<legend class="field-label">Checks</legend>
+			<!-- The guide's card surface: dark-700 on the dark-800 page, 16px radius,
+			     hairline rows at 10% white. -->
+			<div
+				class="divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/5 bg-dark-700"
+			>
 				{#each available as analyzer}
 					<label
-						class="flex cursor-pointer items-start gap-3 bg-slate px-3 py-2.5 hover:bg-steel/40"
+						class="flex cursor-pointer items-start gap-3 px-5 py-3.5 transition-colors duration-300 hover:bg-white/5"
 					>
 						<input
 							type="checkbox"
 							checked={enabled.includes(analyzer.id)}
 							on:change={() => toggle(analyzer.id)}
-							class="mt-0.5 h-3.5 w-3.5 accent-accent"
+							class="mt-0.5 h-4 w-4 accent-primary-500"
 						/>
 						<span class="min-w-0">
-							<span class="block text-[13px] text-[#E6EDF3]">{analyzer.label}</span>
-							<span class="block text-[12px] text-[#8B949E]">{analyzer.note}</span>
+							<span class="block text-[14px] font-medium text-white">{analyzer.label}</span>
+							<span class="block text-[12.5px] text-white/60">{analyzer.note}</span>
 						</span>
 					</label>
 				{/each}
@@ -90,15 +94,10 @@
 		</fieldset>
 
 		{#if error}
-			<p
-				role="alert"
-				class="border-l-2 border-fail bg-fail/10 px-3 py-2 font-mono text-[12px] text-[#F0B4A0]"
-			>
-				{error}
-			</p>
+			<p role="alert" class="alert">{error}</p>
 		{/if}
 
-		<div class="flex items-center gap-3 pt-1">
+		<div class="flex items-center gap-4 pt-1">
 			<button
 				on:click={start}
 				disabled={starting || client.trim().length === 0 || enabled.length === 0}
@@ -106,7 +105,7 @@
 			>
 				{starting ? 'Starting…' : 'Start run'}
 			</button>
-			<span class="text-[12px] text-[#6E7681]">
+			<span class="text-[12.5px] text-white/50">
 				{enabled.length * (competitorCount + 1)} checks · a few minutes
 			</span>
 		</div>

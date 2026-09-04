@@ -1,9 +1,10 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
+	import logo from '$lib/report/brand-logo.svg?raw';
 
 	// A left rail rather than a top bar: this is desktop software, not a website,
-	// and the rail keeps the three tool screens one click apart at all times.
+	// and the rail keeps the tool screens one click apart at all times.
 	const nav = [
 		{ href: '/', label: 'New report' },
 		{ href: '/runs', label: 'Runs' }
@@ -13,19 +14,28 @@
 </script>
 
 <div class="flex min-h-screen">
-	<nav class="screen-only w-52 shrink-0 border-r border-steel bg-slate">
-		<div class="border-b border-steel px-5 py-4">
-			<p class="font-mono text-[11px] uppercase tracking-[0.14em] text-accent">Website</p>
-			<p class="font-mono text-[11px] uppercase tracking-[0.14em] text-[#8B949E]">Health Report</p>
+	<nav class="screen-only w-56 shrink-0 border-r border-white/10 bg-dark-700">
+		<div class="flex items-center gap-3 border-b border-white/10 px-5 py-4">
+			<!-- The brand mark, in brand orange. Build-time constant, our own file. -->
+			<div class="h-8 w-8 shrink-0 text-primary-500 [&>svg]:h-full [&>svg]:w-full">
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html logo}
+			</div>
+			<div class="min-w-0 leading-tight">
+				<p class="truncate font-heading text-[13px] font-semibold text-white">D S Bailey</p>
+				<p class="truncate text-[11px] text-white/60">Website Health Report</p>
+			</div>
 		</div>
 
-		<ul class="px-2 py-3">
+		<ul class="px-3 py-3">
 			{#each nav as item}
 				<li>
+					<!-- Active is the guide's .nav-link.active: orange, semibold. Hover
+					     turns the text orange, as on the site. -->
 					<a
 						href={item.href}
-						class="block rounded-sm px-3 py-2 text-[13px] transition-colors
-							{path === item.href ? 'bg-ink text-white' : 'text-[#8B949E] hover:bg-ink/60 hover:text-[#C9D1D9]'}"
+						class="block rounded-lg px-3 py-2 text-[14px] transition-colors duration-300
+							{path === item.href ? 'font-semibold text-primary-500' : 'text-white/70 hover:text-primary-500'}"
 					>
 						{item.label}
 					</a>
@@ -34,7 +44,7 @@
 		</ul>
 	</nav>
 
-	<main class="min-w-0 flex-1 px-8 py-7 print:p-0">
+	<main class="min-w-0 flex-1 px-10 py-8 print:p-0">
 		<slot />
 	</main>
 </div>

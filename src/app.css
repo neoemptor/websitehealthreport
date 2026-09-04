@@ -1,23 +1,48 @@
+/* Bundled, not fetched: the packaged app runs offline. Weights match the
+   guide's stated usage — Inter 400/500/600/700 for body, Poppins 600/700/800
+   for headings and stat figures. */
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/poppins/600.css';
+@import '@fontsource/poppins/700.css';
+@import '@fontsource/poppins/800.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-	/* `slate` here is this project's own flat colour, not Tailwind's slate-N
-	   scale — defining it replaces that scale, so slate-100 and friends do not
-	   exist. Body text colour is set on body below. */
+	/* Dark-first, as the guide puts it: page on dark-800, white body at 70%. */
 	html {
-		@apply bg-ink;
+		@apply bg-dark-800;
 	}
 
 	body {
-		@apply font-sans text-[13.5px] leading-relaxed text-[#C9D1D9] antialiased;
+		@apply font-sans text-[14px] leading-relaxed text-white/70 antialiased;
 	}
 
-	/* Keyboard focus stays visible everywhere. Tailwind's preflight removes the
-	   browser default, and this is a tool driven largely from the keyboard. */
+	h1,
+	h2,
+	h3 {
+		@apply font-heading text-white;
+	}
+
+	/* Keyboard focus stays visible everywhere; the brand orange is the ring. */
 	:focus-visible {
-		@apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-ink;
+		@apply outline-none ring-2 ring-primary-500 ring-offset-2 ring-offset-dark-800;
+	}
+
+	/* Browser surfaces carry the design too: selection and the caret in brand
+	   orange, not the platform default blue. */
+	::selection {
+		@apply bg-primary-500 text-black;
+	}
+
+	input,
+	textarea {
+		caret-color: theme('colors.primary.500');
 	}
 }
 
@@ -26,49 +51,106 @@
 	   report. Glyph plus word plus colour — never colour alone, because these
 	   reports get printed in black and white. */
 	.chip {
-		@apply inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] uppercase tracking-wide;
+		@apply inline-flex items-center gap-1.5 whitespace-nowrap font-sans text-[11px] font-semibold uppercase tracking-wide;
 	}
 
-	.chip::before {
-		@apply text-[13px] leading-none;
-		content: attr(data-glyph);
+	/* The mark is an authored SVG, not a Unicode character standing in for one:
+	   five states at one 1.5px stroke, masked so it takes currentColor like the
+	   word beside it. print-color-adjust keeps the fill when printed. */
+	.chip::before,
+	.alert::before {
+		content: '';
+		@apply inline-block h-[11px] w-[11px] shrink-0 bg-current;
+		-webkit-mask: var(--mark) center / contain no-repeat;
+		mask: var(--mark) center / contain no-repeat;
+		print-color-adjust: exact;
+		-webkit-print-color-adjust: exact;
+	}
+
+	.chip[data-mark='ok']::before {
+		--mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3C/svg%3E");
+	}
+
+	.chip[data-mark='na']::before {
+		--mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.75' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E");
+	}
+
+	.chip[data-mark='fail']::before,
+	.alert::before {
+		--mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+	}
+
+	.chip[data-mark='pending']::before {
+		--mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='1.75'/%3E%3C/svg%3E");
+	}
+
+	.chip[data-mark='running']::before {
+		--mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='3.75' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3Cpath d='M6 2.25a3.75 3.75 0 0 1 0 7.5z'/%3E%3C/svg%3E");
 	}
 
 	.field-label {
-		@apply mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em] text-[#8B949E];
+		@apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-dark-400;
 	}
 
+	/* The guide's form recipe: 8px radius, 20% white border, dark-800 fill,
+	   orange border on focus. */
 	.field {
-		@apply w-full rounded-sm border border-steel bg-slate px-3 py-2 font-mono text-[13px] text-[#E6EDF3] placeholder:text-[#6E7681];
+		@apply w-full rounded-lg border border-white/20 bg-dark-800 px-4 py-3 font-mono text-[13px] text-white placeholder:text-dark-500 transition-colors duration-300;
 	}
 
 	.field:focus {
-		@apply border-accent outline-none;
+		@apply border-primary-500 outline-none;
 	}
 
+	/* Controls are refined and restrained by the operator's choice: the guide's
+	   shape, weight and tracking, but none of its lift, glow or shine sweep. */
 	.btn {
-		@apply rounded-sm px-4 py-2 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+		@apply inline-flex items-center justify-center rounded-btn px-8 py-3.5 font-heading text-[15px] font-semibold tracking-[0.5px] transition-colors duration-300 disabled:cursor-not-allowed;
 	}
 
+	/* Black text on orange, always — the guide's one hard rule for buttons.
+	   Disabled goes neutral rather than dimming the orange: brand orange at 40%
+	   on the dark page reads as a muddy brown, which is a defect, not a state. */
 	.btn-primary {
-		@apply bg-accent text-white hover:bg-[#14757E];
+		@apply bg-primary-500 text-black hover:bg-primary-600 active:bg-primary-700 disabled:bg-dark-600 disabled:text-white/40 disabled:hover:bg-dark-600;
+	}
+
+	.btn-quiet:disabled {
+		@apply border-dark-600 text-white/40 hover:bg-transparent hover:text-white/40;
 	}
 
 	.btn-quiet {
-		@apply border border-steel text-[#C9D1D9] hover:border-[#5A6673] hover:text-white;
+		@apply border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-black;
+	}
+
+	/* Errors name the problem in the status vocabulary — a glyph and the
+	   message — on a card surface. No coloured edge stripe. */
+	.alert {
+		@apply flex items-start gap-2.5 rounded-lg bg-dark-700 px-4 py-3 font-mono text-[12px] text-fail-bright;
+	}
+
+	.alert::before {
+		@apply mt-[3px];
 	}
 }
 
 /* ---------------------------------------------------------------------------
    Print. The report route is rendered to PDF by electron/pdf.ts, so this is
    not a courtesy stylesheet — it is how the client-facing deliverable looks.
-   The screen chrome disappears and the document takes over the page.
+   The guide's own light variant governs paper: white stock, #1a1a1a text,
+   orange only on headings, rules and icons. The screen chrome disappears.
    --------------------------------------------------------------------------- */
 @media print {
 	html,
 	body {
-		@apply bg-white text-ink;
+		@apply bg-white text-dark-700;
 		font-size: 10.5pt;
+	}
+
+	h1,
+	h2,
+	h3 {
+		@apply text-dark-700;
 	}
 
 	.screen-only {

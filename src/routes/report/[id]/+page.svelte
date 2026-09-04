@@ -7,6 +7,7 @@
 	import Keywords from '$lib/report/Keywords.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
+	import { severityOf } from '$lib/report/severity';
 
 	// Analyzers without a component fall back to their raw values, so adding one
 	// can never break the report. The remaining seven arrive with their plans.
@@ -75,14 +76,23 @@
 		return NAMED[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
 	}
 
-	// The same glyph vocabulary as the live grid, so a status reads identically
+	// The same mark vocabulary as the live grid, so a status reads identically
 	// on screen and on paper. Never colour alone — these get printed in mono.
-	function mark(result: AnalyzerResult | undefined): { glyph: string; word: string; tone: string } {
-		if (!result) return { glyph: '·', word: 'not run', tone: 'text-na' };
-		if (result.status === 'ok') return { glyph: '●', word: 'ok', tone: 'text-ok' };
-		if (result.status === 'unavailable') return { glyph: '○', word: 'n/a', tone: 'text-na' };
-		return { glyph: '✕', word: 'failed', tone: 'text-fail' };
+	function mark(result: AnalyzerResult | undefined): { mark: string; word: string; tone: string } {
+		if (!result) return { mark: 'pending', word: 'not run', tone: 'text-dark-500' };
+		if (result.status === 'ok') return { mark: 'ok', word: 'ok', tone: 'text-ok' };
+		if (result.status === 'unavailable') return { mark: 'na', word: 'n/a', tone: 'text-dark-500' };
+		return { mark: 'fail', word: 'failed', tone: 'text-fail' };
 	}
+
+	// Severity words on paper. Warn is plain dark-700: the guide keeps orange
+	// off any type under 14pt on white, and the word itself carries the state.
+	const severityTone: Record<string, string> = {
+		ok: 'text-ok',
+		warn: 'text-dark-700',
+		fail: 'text-fail',
+		na: 'text-dark-500'
+	};
 </script>
 
 <!-- data-report-state is the PDF export's readiness signal: printToPDF used to
@@ -90,46 +100,52 @@
      "Loading…" placeholder and reported success. See electron/pdf.ts. -->
 <div data-report-state={state} data-report-error={error || null}>
 	{#if error}
-		<p
-			role="alert"
-			class="max-w-3xl border-l-2 border-fail bg-fail/10 px-3 py-2 font-mono text-[12px] text-[#F0B4A0]"
-		>
-			{error}
-		</p>
+		<p role="alert" class="alert max-w-3xl">{error}</p>
 	{:else if run}
-		<div class="screen-only mb-5 flex max-w-[820px] items-center gap-3">
+		<div class="screen-only mb-6 flex max-w-[820px] items-center gap-4">
 			<button on:click={exportPdf} disabled={exporting} class="btn btn-primary">
 				{exporting ? 'Exporting…' : 'Export PDF'}
 			</button>
 			<a href={`/run/${run.id}`} class="btn btn-quiet">Back to run</a>
 
 			{#if saved}
-				<span class="font-mono text-[12px] text-ok">Saved to {saved}</span>
+				<span class="font-mono text-[12px] text-ok-bright">Saved to {saved}</span>
 			{/if}
 			{#if exportError}
 				<!-- Export failure has to be visible here. The PDF is the deliverable,
 				     and a silent failure is indistinguishable from a slow one. -->
-				<span role="alert" class="font-mono text-[12px] text-fail"
-					>Export failed — {exportError}</span
-				>
+				<span role="alert" class="font-mono text-[12px] text-fail-bright">
+					Export failed — {exportError}
+				</span>
 			{/if}
 		</div>
 
-		<!-- The document itself. Light on screen as well as in print, because this
-		     is a preview of a printed artifact, not another tool screen. -->
+		<!-- The document itself: the guide's light print variant, on screen as
+		     well as in print, because this is a preview of a printed artifact and
+		     not another tool screen. White stock, dark-700 text, orange reserved
+		     for headings, rules and the mark. -->
 		<article
-			class="max-w-[820px] bg-paper px-12 py-11 text-ink shadow-[0_1px_0_rgba(0,0,0,0.4)] print:max-w-none print:px-0 print:py-0 print:shadow-none"
+			class="max-w-[820px] bg-white px-12 py-11 text-dark-700 shadow-[0_2px_24px_rgba(0,0,0,0.5)] print:max-w-none print:px-0 print:py-0 print:shadow-none"
 		>
-			<!-- Masthead: the subject on the left, the letterhead on the right. The
-			     document type sits in the line beneath the heading rather than as a
-			     label above it — the client's own domain is the heading, because it
-			     is the thing they recognise first. -->
-			<header class="flex items-start justify-between gap-8 border-b-2 border-ink pb-5">
-				<div class="min-w-0">
-					<h1 class="font-serif text-[30px] leading-tight">{host(run.client)}</h1>
-					<!-- text-pretty stops the competitor count orphaning its last word
-					     onto a line of its own beside the letterhead. -->
-					<p class="mt-1.5 text-pretty text-[11.5px] text-[#6B6659]">
+			<!-- Letterhead first, full width, as stationery is: the guide's 25mm mark
+			     with clear space equal to its own height beneath it, before the
+			     subject. A two-column masthead cannot honour that clear space and
+			     keep a domain whole on A4, so the row is not attempted. The 9mm on
+			     paper adds to the 16mm page margin to make the clear space above. -->
+			<div class="pb-[25mm] print:pt-[9mm]">
+				<Letterhead />
+			</div>
+
+			<!-- The subject: the client's own domain is the heading, because it is
+			     the thing they recognise first; the document type sits beneath it.
+			     break-words only for a domain longer than a full line, where
+			     breaking beats overflowing the page. -->
+			<header class="border-b-2 border-primary-500 pb-5">
+				<div>
+					<h1 class="break-words font-heading text-[30px] font-bold leading-tight text-dark-700">
+						{host(run.client)}
+					</h1>
+					<p class="mt-1.5 text-pretty text-[11.5px] text-dark-500">
 						Website health report ·
 						{new Date(run.createdAt).toLocaleDateString('en-AU', {
 							day: 'numeric',
@@ -142,23 +158,34 @@
 						{/if}
 					</p>
 				</div>
-
-				<Letterhead />
 			</header>
 
-			<!-- A prospect may read this with nobody there to explain it, so the
-			     document says up front how to read a check that produced no number.
-			     Measure is held near 62ch; the article is wider than comfortable
-			     for running prose. -->
-			<p class="mt-6 max-w-[62ch] text-[13px] leading-relaxed text-[#3A3730]">
+			<!-- One line on how to read it; the legend beneath explains the rest. -->
+			<p class="mt-5 text-[13px] leading-relaxed text-dark-600">
 				{#if run.competitors.length > 0}
-					Every site below was measured with the same checks, so the results can be read side by
-					side.
+					Every site below was measured with the same checks; each opens with a verdict, then the
+					readings.
 				{:else}
-					The checks below were run against this site.
+					Each check below opens with a verdict, then the readings.
 				{/if}
-				Where a check could not run, it says why instead of leaving a gap.
 			</p>
+
+			<!-- The status legend, once: the three states explained in a symbol
+			     table at the head of the register. -->
+			<dl class="mt-4 flex flex-wrap gap-x-7 gap-y-1.5 border-y border-dark-200 py-2.5">
+				<div class="flex items-baseline gap-2">
+					<dt class="chip text-ok" data-mark="ok">ok</dt>
+					<dd class="text-[11px] text-dark-500">measured</dd>
+				</div>
+				<div class="flex items-baseline gap-2">
+					<dt class="chip text-dark-500" data-mark="na">n/a</dt>
+					<dd class="text-[11px] text-dark-500">not available on the machine that ran this</dd>
+				</div>
+				<div class="flex items-baseline gap-2">
+					<dt class="chip text-fail" data-mark="fail">failed</dt>
+					<dd class="text-[11px] text-dark-500">the check ran and could not complete</dd>
+				</div>
+			</dl>
 
 			<!-- Domains flow continuously rather than one per page. A section is
 			     therefore free to split across a page boundary — deliberately: the
@@ -166,51 +193,63 @@
 			     pushes the whole thing to the next page and leaves the gap this was
 			     meant to remove. What must not split is kept whole below. -->
 			{#each run.domains as domain}
-				<section class="pt-8">
+				<section class="pt-9">
 					<!-- break-after-avoid keeps a domain heading with at least the start
 					     of its content, so a name never strands at the foot of a page. -->
 					<div
-						class="flex items-baseline justify-between gap-6 break-inside-avoid break-after-avoid border-b border-rule pb-2"
+						class="flex items-baseline justify-between gap-6 break-inside-avoid break-after-avoid border-b border-dark-200 pb-2"
 					>
-						<h2 class="font-serif text-[21px]">{host(domain.domain)}</h2>
-						<span class="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6659]">
+						<h2 class="font-heading text-[21px] font-bold text-dark-700">{host(domain.domain)}</h2>
+						<span class="text-[10px] font-semibold uppercase tracking-[0.12em] text-dark-500">
 							{domain.role}
 						</span>
 					</div>
 
-					<!-- Status rail: the shape of the result before any numbers. A reader
-					     flipping the PDF sees at a glance what was measured and what
-					     could not be. -->
+					<!-- Status rail: the shape of the result before any numbers. -->
 					<div class="mt-3 flex break-inside-avoid flex-wrap gap-x-6 gap-y-1.5">
 						{#each run.enabledAnalyzers as id}
 							{@const m = mark(domain.analyzers[id])}
-							<span class="chip {m.tone}" data-glyph={m.glyph}>
-								<span class="text-ink">{analyzerName(id)}</span>
-								<span class="text-[#6B6659]">{m.word}</span>
+							<span class="chip {m.tone}" data-mark={m.mark}>
+								<span class="text-dark-700">{analyzerName(id)}</span>
+								<span class="text-dark-500">{m.word}</span>
 							</span>
 						{/each}
 					</div>
 
 					{#each run.enabledAnalyzers as id}
 						{@const result = domain.analyzers[id]}
-						<div class="mt-6">
-							<h3 class="break-after-avoid font-serif text-[15px] font-semibold">
-								{analyzerName(id)}
-							</h3>
+						{@const sev = severityOf(id, result)}
+						<!-- A check may run over a page: kept whole, a seven-row check
+						     lifts off a half-empty page. What must not split is held
+						     smaller — heading and finding refuse a break after them, so
+						     a verdict is never stranded with its readings overleaf, and
+						     each table keeps its rows (and a short table itself) whole. -->
+						<div class="mt-7">
+							<!-- The inspection's device: an orange check heading, the
+							     severity word in the right-hand result column that rules
+							     the page, then the finding — before any number. 19px is
+							     the guide's floor for orange type on white (14pt). -->
+							<div
+								class="flex items-baseline justify-between gap-6 break-inside-avoid break-after-avoid"
+							>
+								<h3 class="font-heading text-[19px] font-semibold text-primary-800">
+									{analyzerName(id)}
+								</h3>
+								<span
+									class="font-heading text-[12px] font-bold uppercase tracking-[0.08em] {severityTone[
+										sev.tone
+									]}"
+								>
+									{sev.word}
+								</span>
+							</div>
+							<p
+								class="mt-1 max-w-[62ch] break-inside-avoid break-after-avoid text-[12.5px] leading-relaxed text-dark-600"
+							>
+								{sev.finding}
+							</p>
 
-							{#if !result}
-								<p class="mt-1 text-[12px] text-[#6B6659]">Not run.</p>
-							{:else if result.status === 'unavailable'}
-								<p class="mt-1 text-[12px] text-[#6B6659]">
-									<span class="font-medium text-ink">Not measured.</span>
-									{result.reason}
-								</p>
-							{:else if result.status === 'failed'}
-								<p class="mt-1 text-[12px] text-[#6B6659]">
-									<span class="font-medium text-fail">Check failed.</span>
-									{result.error}
-								</p>
-							{:else}
+							{#if result && result.status === 'ok'}
 								<svelte:component this={components[id] ?? Unknown} data={result.data} />
 							{/if}
 						</div>
@@ -219,6 +258,6 @@
 			{/each}
 		</article>
 	{:else}
-		<p class="font-mono text-[12px] text-[#6E7681]">Loading…</p>
+		<p class="font-mono text-[12px] text-white/50">Loading…</p>
 	{/if}
 </div>

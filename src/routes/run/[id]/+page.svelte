@@ -34,20 +34,20 @@
 		text: string;
 		title: string;
 		status: string;
-		glyph: string;
+		mark: string;
 	} {
-		if (!result) return { text: 'waiting', title: 'Waiting', status: 'pending', glyph: '·' };
-		if (result.status === 'ok') return { text: 'ok', title: 'Completed', status: 'ok', glyph: '●' };
+		if (!result) return { text: 'waiting', title: 'Waiting', status: 'pending', mark: 'pending' };
+		if (result.status === 'ok') return { text: 'ok', title: 'Completed', status: 'ok', mark: 'ok' };
 		if (result.status === 'unavailable')
-			return { text: 'n/a', title: result.reason, status: 'unavailable', glyph: '○' };
-		return { text: 'fail', title: result.error, status: 'failed', glyph: '✕' };
+			return { text: 'n/a', title: result.reason, status: 'unavailable', mark: 'na' };
+		return { text: 'fail', title: result.error, status: 'failed', mark: 'fail' };
 	}
 
 	const tone: Record<string, string> = {
-		pending: 'text-[#6E7681]',
-		ok: 'text-ok',
-		unavailable: 'text-na',
-		failed: 'text-fail'
+		pending: 'text-white/40',
+		ok: 'text-ok-bright',
+		unavailable: 'text-dark-400',
+		failed: 'text-fail-bright'
 	};
 
 	// Progress is counted from the cells themselves rather than tracked
@@ -59,6 +59,13 @@
 				0
 		  )
 		: 0;
+
+	// An aborted run flags the last row that got any result, so the operator
+	// sees where it stopped rather than inferring it from the blanks.
+	$: stoppedAt =
+		run && run.status === 'aborted'
+			? run.domains.reduce((last, d, i) => (Object.keys(d.analyzers).length > 0 ? i : last), -1)
+			: -1;
 
 	function host(url: string): string {
 		try {
@@ -86,51 +93,48 @@
 </script>
 
 {#if error}
-	<p
-		role="alert"
-		class="max-w-3xl border-l-2 border-fail bg-fail/10 px-3 py-2 font-mono text-[12px] text-[#F0B4A0]"
-	>
-		{error}
-	</p>
+	<p role="alert" class="alert max-w-3xl">{error}</p>
 {/if}
 
 {#if run}
 	<div class="max-w-4xl">
 		<div class="flex items-start justify-between gap-6">
 			<div class="min-w-0">
-				<h1 class="truncate font-mono text-[20px] text-white">{host(run.client)}</h1>
-				<p class="mt-1 text-[13px] text-[#8B949E]">
-					{new Date(run.createdAt).toLocaleString()}
+				<h1 class="truncate text-[28px] font-bold leading-tight">{host(run.client)}</h1>
+				<p class="mt-1.5 text-[14px] text-white/60">
+					{new Date(run.createdAt).toLocaleString('en-AU')}
 				</p>
 			</div>
 
 			<div class="shrink-0 text-right">
-				<p class="font-mono text-[13px] text-[#E6EDF3]">{settled}/{total}</p>
-				<p class="text-[11px] uppercase tracking-wide text-[#6E7681]">{run.status}</p>
+				<!-- Stat figure, the guide's way: Poppins bold, orange. -->
+				<p class="font-heading text-[26px] font-bold leading-none text-primary-500">
+					{settled}<span class="text-white/40">/{total}</span>
+				</p>
+				<p class="mt-1 text-[11px] uppercase tracking-wide text-white/50">{run.status}</p>
 			</div>
 		</div>
 
-		<!-- Progress reads as a filling bar because a full run takes minutes and
-		     the operator needs to know it is still moving. -->
-		<div class="mt-4 h-0.5 w-full bg-steel">
+		<!-- The one authored motion on screen: the register filling in. -->
+		<div class="mt-5 h-1 w-full overflow-hidden rounded-full bg-white/10">
 			<div
-				class="h-full bg-accent transition-[width] duration-300"
+				class="h-full rounded-full bg-primary-500 transition-[width] duration-500 ease-out"
 				style={`width: ${total === 0 ? 0 : Math.round((settled / total) * 100)}%`}
 			/>
 		</div>
 
-		<div class="mt-6 overflow-x-auto">
+		<div class="mt-7 overflow-x-auto rounded-2xl border border-white/5 bg-dark-700">
 			<table class="w-full border-collapse text-left">
 				<thead>
-					<tr class="border-b border-steel">
+					<tr class="border-b border-white/10">
 						<th
-							class="py-2 pr-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#6E7681]"
+							class="px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-dark-400"
 						>
 							Domain
 						</th>
 						{#each run.enabledAnalyzers as id}
 							<th
-								class="py-2 pr-6 text-[11px] font-medium uppercase tracking-[0.08em] text-[#6E7681]"
+								class="px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-dark-400"
 							>
 								{id}
 							</th>
@@ -138,22 +142,27 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each run.domains as domain}
-						<tr class="border-b border-steel/60">
-							<td class="py-2.5 pr-6">
-								<span class="block font-mono text-[13px] text-[#E6EDF3]">
+					{#each run.domains as domain, i}
+						<tr class="border-b border-white/5 last:border-0">
+							<td class="px-5 py-3">
+								<span class="block font-mono text-[14px] text-white">
 									{host(domain.domain)}
 								</span>
-								<span class="block text-[11px] uppercase tracking-wide text-[#6E7681]">
+								<span class="block text-[11px] uppercase tracking-wide text-white/50">
 									{domain.role}
+									{#if i === stoppedAt}
+										<span class="ml-2 font-semibold normal-case tracking-normal text-primary-500">
+											· stopped here
+										</span>
+									{/if}
 								</span>
 							</td>
 							{#each run.enabledAnalyzers as id}
 								{@const c = cell(domain.analyzers[id])}
-								<td class="py-2.5 pr-6">
+								<td class="px-5 py-3">
 									<!-- title carries the reason or error: with fragile analyzers,
 									     "why is this cell not ok" is the question asked most. -->
-									<span class="chip {tone[c.status]}" data-glyph={c.glyph} title={c.title}>
+									<span class="chip {tone[c.status]}" data-mark={c.mark} title={c.title}>
 										{c.text}
 									</span>
 								</td>
@@ -164,7 +173,7 @@
 			</table>
 		</div>
 
-		<div class="mt-7 flex items-center gap-3">
+		<div class="mt-8 flex items-center gap-4">
 			{#if run.status === 'running'}
 				<button on:click={cancel} disabled={cancelling} class="btn btn-quiet">
 					{cancelling ? 'Cancelling…' : 'Cancel run'}
@@ -180,5 +189,5 @@
 		</div>
 	</div>
 {:else if !error}
-	<p class="font-mono text-[12px] text-[#6E7681]">Loading…</p>
+	<p class="font-mono text-[12px] text-white/50">Loading…</p>
 {/if}

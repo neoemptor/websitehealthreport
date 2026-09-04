@@ -18,6 +18,12 @@ describe('detectCloaking', () => {
 		expect(detectCloaking([page])).toEqual([]);
 	});
 
+	it('is quiet when the bot only saw a JS shell (short unrelated bot text)', () => {
+		const shell = Array.from({ length: 60 }, (_, i) => `shell${i}`).join(' ');
+		const page = makeSnapshot({ path: '/', visibleText: prose('a'), botText: shell });
+		expect(detectCloaking([page])).toEqual([]);
+	});
+
 	it('skips pages with no bot text or under 50 words', () => {
 		expect(
 			detectCloaking([makeSnapshot({ path: '/', visibleText: prose('a'), botText: null })])

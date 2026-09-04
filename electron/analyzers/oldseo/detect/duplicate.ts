@@ -29,7 +29,7 @@ function tokens(title: string): string[] {
  */
 function pattern(title: string, allowed: Set<string>): string | null {
 	const t = tokens(title);
-	for (let width = 1; width <= 2; width++) {
+	for (let width = 2; width >= 1; width--) {
 		for (let i = 0; i + width <= t.length; i++) {
 			const window = t
 				.slice(i, i + width)

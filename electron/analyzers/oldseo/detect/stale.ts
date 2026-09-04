@@ -1,5 +1,12 @@
 import type { Finding } from '../../../../src/lib/shared/oldseo';
-import { cleanEvidence, ngrams, topPhrases, words, type PageSnapshot } from '../snapshot';
+import {
+	STOP_WORDS,
+	cleanEvidence,
+	ngrams,
+	topPhrases,
+	words,
+	type PageSnapshot
+} from '../snapshot';
 
 const NOISE_ROBOTS = new Set(['index', 'follow', 'index,follow', 'index, follow', 'all']);
 const TITLE_MAX_CHARS = 70;
@@ -14,7 +21,13 @@ function sharedPhrase(h1s: string[]): string | null {
 		return new Set([...ngrams(t, 3), ...ngrams(t, 2), ...ngrams(t, 1)]);
 	});
 	const candidates = [...sets[0]].sort((a, b) => b.length - a.length);
-	return candidates.find((c) => sets.every((s) => s.has(c))) ?? null;
+	return (
+		candidates.find((c) => {
+			const parts = c.split(' ');
+			if (STOP_WORDS.has(parts[0]) || STOP_WORDS.has(parts[parts.length - 1])) return false;
+			return sets.every((s) => s.has(c));
+		}) ?? null
+	);
 }
 
 export function detectStale(pages: PageSnapshot[]): Finding[] {

@@ -97,11 +97,11 @@ async function crawl(
 		if (batch.length === 0) break;
 		for (const url of batch) {
 			visited.add(url);
-			internal++;
 			try {
 				const page = await readPage(browser, url, signal);
 				snapshots.push(page.snapshot);
 				queue.push(...page.links);
+				internal++;
 			} catch {
 				skipped++;
 			}

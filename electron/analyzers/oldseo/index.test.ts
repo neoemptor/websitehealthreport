@@ -100,14 +100,18 @@ describe('oldseo analyze', () => {
 	});
 
 	it('counts a failing internal page as skipped and continues', async () => {
+		state.robots = 'User-agent: *\nDisallow: /admin';
 		state.pages['https://example.com/a'].fail = true;
+		state.pages['https://example.com/b'].links = ['/c'];
 		const data = await oldSeoAnalyzer.analyze(
 			'https://example.com/',
-			settings,
+			{ maxPages: 2 },
 			new AbortController().signal
 		);
 		expect(data.pagesSkipped).toBe(1);
-		expect(data.pagesRead).toBe(3); // home + b + c
+		// home + b + c: the failed /a does not consume the maxPages budget, so
+		// the crawl still reaches two more successful pages (b, then c via b).
+		expect(data.pagesRead).toBe(3);
 	});
 
 	it('fails when the homepage cannot load', async () => {

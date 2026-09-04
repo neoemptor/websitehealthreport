@@ -144,7 +144,7 @@ export type RawSnapshot = Omit<PageSnapshot, 'botText' | 'path'> & { links: stri
  */
 export function snapshotScript(): (url: string) => RawSnapshot {
 	return (url: string) => {
-		const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'SVG']);
+		const SKIP_SELECTOR = 'script,style,noscript,template,svg';
 		const UI_PATTERN =
 			/menu|modal|cookie|sr-only|visually-hidden|screen-reader|nav|dropdown|submenu|drawer|offcanvas|hamburger/i;
 		const UI_SELECTOR = 'nav,header,footer,[role=navigation],[aria-hidden],dialog,[hidden]';
@@ -224,7 +224,7 @@ export function snapshotScript(): (url: string) => RawSnapshot {
 			const text = (current.textContent ?? '').replace(/\s+/g, ' ').trim();
 			if (!text) continue;
 			const el = current.parentElement;
-			if (!el || el.closest([...SKIP].join(','))) continue;
+			if (!el || el.closest(SKIP_SELECTOR)) continue;
 			const hidden = hiddenReason(el, text);
 			if (!hidden) visible.push(text);
 			if (text.split(' ').length >= 3 || el.closest('a')) {

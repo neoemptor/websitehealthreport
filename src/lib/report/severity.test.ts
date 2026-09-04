@@ -146,4 +146,9 @@ describe('severityOf — oldseo', () => {
 		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
 		expect(s.finding).toBe('1 finding across 6 pages; the worst is old habits on /.');
 	});
+
+	it('falls back to Measured when a finding has an unrecognised severity', () => {
+		const s = ok([{ check: 'stale', severity: 'critical', page: '/', evidence: 'x' }]);
+		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
+	});
 });

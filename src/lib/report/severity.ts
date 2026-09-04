@@ -122,6 +122,16 @@ const CHECK_NAMES: Record<OldSeoCheck, string> = {
 	stale: 'old habits'
 };
 
+const OLD_SEO_CHECKS: OldSeoCheck[] = [
+	'hidden-text',
+	'hidden-link',
+	'stuffing',
+	'cloaking',
+	'duplicate',
+	'stale'
+];
+const OLD_SEO_SEVERITIES = ['high', 'medium', 'low'] as const;
+
 function isOldSeo(d: unknown): d is OldSeoData {
 	const o = d as OldSeoData | null;
 	return (
@@ -131,9 +141,9 @@ function isOldSeo(d: unknown): d is OldSeoData {
 		Array.isArray(o.findings) &&
 		o.findings.every(
 			(f) =>
-				typeof f?.check === 'string' &&
-				typeof f?.severity === 'string' &&
-				typeof f?.page === 'string'
+				typeof f?.page === 'string' &&
+				(OLD_SEO_SEVERITIES as readonly string[]).includes(f?.severity) &&
+				(OLD_SEO_CHECKS as readonly string[]).includes(f?.check)
 		)
 	);
 }

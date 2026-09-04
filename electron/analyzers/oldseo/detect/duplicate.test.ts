@@ -30,6 +30,19 @@ describe('detectDuplicate', () => {
 		expect(f.evidence).toBe('"Garage Door Repairs {place} | CJ Doors" on 3 pages');
 	});
 
+	it('groups two-word place names as a single {place} token', () => {
+		const pages = ['Canning Vale', 'Victoria Park', 'Mandurah'].map((place, i) =>
+			makeSnapshot({
+				path: `/${i}`,
+				title: `Doors ${place}`,
+				visibleText: body(`s${i}`)
+			})
+		);
+		const [f] = detectDuplicate(pages);
+		expect(f).toMatchObject({ check: 'duplicate', severity: 'medium', page: '/0' });
+		expect(f.evidence).toBe('"Doors {place}" on 3 pages');
+	});
+
 	it('accepts a keyword from the meta keywords as the varying token', () => {
 		const pages = ['roller', 'sectional', 'tilt'].map((kw, i) =>
 			makeSnapshot({

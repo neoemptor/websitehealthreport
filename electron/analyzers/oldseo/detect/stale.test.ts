@@ -37,6 +37,10 @@ describe('detectStale', () => {
 		expect(f.evidence).toBe('3 H1s share "garage doors"');
 	});
 
+	it('is quiet when the only shared phrase is a bare stop word', () => {
+		expect(detectStale([makeSnapshot({ path: '/', h1s: ['The Best', 'The Worst'] })])).toEqual([]);
+	});
+
 	it('is quiet on a tidy page', () => {
 		expect(
 			detectStale([

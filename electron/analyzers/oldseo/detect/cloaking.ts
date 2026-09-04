@@ -5,6 +5,8 @@ import { jaccard, shingles, words, type PageSnapshot } from '../snapshot';
 const MAX_SIMILARITY = 0.6;
 /** Tiny pages differ for innocent reasons (a cookie banner, a date). */
 const MIN_WORDS = 50;
+/** Below this ratio the Googlebot fetch likely only saw a JS shell, not a cloaking attempt. */
+const MIN_BOT_RATIO = 0.5;
 
 export function detectCloaking(pages: PageSnapshot[]): Finding[] {
 	const findings: Finding[] = [];
@@ -13,6 +15,7 @@ export function detectCloaking(pages: PageSnapshot[]): Finding[] {
 		const browserWords = words(page.visibleText).length;
 		const botWords = words(page.botText).length;
 		if (browserWords < MIN_WORDS || botWords < MIN_WORDS) continue;
+		if (botWords < browserWords * MIN_BOT_RATIO) continue;
 		const similarity = jaccard(shingles(page.visibleText), shingles(page.botText));
 		if (similarity >= MAX_SIMILARITY) continue;
 		findings.push({

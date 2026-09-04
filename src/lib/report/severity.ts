@@ -65,6 +65,7 @@ function headerTitle(header: string): string {
 const SECURITY_MIN_CERT_DAYS = 30;
 const AEO_POOR_JS_RATIO = 0.5;
 const AEO_NEEDS_WORK_JS_RATIO = 0.8;
+const CONTENT_POOR_THRESHOLD = 10;
 
 /**
  * The Building Inspection's defining device: every check opens with a
@@ -86,6 +87,26 @@ type LighthouseData = {
 };
 
 type KeywordsData = { keywords: Array<{ keyword: string; count: number }> };
+
+type SeoQuakeData = {
+	semrushRank: number | null;
+	backlinks: number | null;
+	linkingDomains: number | null;
+	pinterest: number | null;
+	raw: Record<string, string>;
+};
+
+type Misspelling = { word: string; count: number; suggestions: string[] };
+
+type GrammarState =
+	| { status: 'ok'; findings: Array<{ message: string; context: string }> }
+	| { status: 'unavailable'; reason: string }
+	| { status: 'failed'; error: string };
+
+type ContentData = {
+	spelling: { misspellings: Misspelling[] };
+	grammar: GrammarState;
+};
 
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
@@ -437,6 +458,81 @@ function aeoSeverity(d: AeoData): Severity {
 	return { word: 'Good', tone: 'ok', finding };
 }
 
+function isSeoQuake(d: unknown): d is SeoQuakeData {
+	const s = d as SeoQuakeData | null;
+	return (
+		!!s &&
+		(s.semrushRank === null || isNumber(s.semrushRank)) &&
+		(s.backlinks === null || isNumber(s.backlinks)) &&
+		(s.linkingDomains === null || isNumber(s.linkingDomains)) &&
+		(s.pinterest === null || isNumber(s.pinterest)) &&
+		typeof s.raw === 'object' &&
+		s.raw !== null
+	);
+}
+
+function seoQuakeSeverity(d: SeoQuakeData): Severity {
+	if (
+		d.semrushRank === null &&
+		d.backlinks === null &&
+		d.linkingDomains === null &&
+		d.pinterest === null
+	) {
+		return {
+			word: 'No data',
+			tone: 'na',
+			finding: 'SEO Quake showed no figures for this site.'
+		};
+	}
+
+	const rank = d.semrushRank === null ? 'no data' : d.semrushRank.toLocaleString('en-AU');
+	const backlinks = d.backlinks === null ? 'no data' : d.backlinks.toLocaleString('en-AU');
+	const domains = d.linkingDomains === null ? 'no data' : d.linkingDomains.toLocaleString('en-AU');
+
+	return {
+		word: 'Measured',
+		tone: 'ok',
+		finding: `Semrush rank ${rank}; ${backlinks} backlinks from ${domains} domains.`
+	};
+}
+
+function isContent(d: unknown): d is ContentData {
+	const c = d as ContentData | null;
+	const misspellings = c?.spelling?.misspellings;
+	const grammar = c?.grammar;
+	return (
+		!!c &&
+		Array.isArray(misspellings) &&
+		misspellings.every(
+			(m) => typeof m?.word === 'string' && isNumber(m?.count) && Array.isArray(m?.suggestions)
+		) &&
+		!!grammar &&
+		(grammar.status === 'ok' || grammar.status === 'unavailable' || grammar.status === 'failed')
+	);
+}
+
+function contentSeverity(d: ContentData): Severity {
+	const misspellingCount = d.spelling.misspellings.length;
+	const grammarFindings = d.grammar.status === 'ok' ? d.grammar.findings.length : 0;
+	const grammarUnavailable = d.grammar.status === 'unavailable';
+
+	const parts: string[] = [];
+	if (misspellingCount > 0) parts.push(plural(misspellingCount, 'misspelling'));
+	if (grammarFindings > 0) parts.push(plural(grammarFindings, 'grammar issue'));
+
+	let finding =
+		parts.length > 0 ? `${parts.join(' and ')} found.` : 'No misspellings or grammar issues found.';
+	if (grammarUnavailable) finding += ' Grammar was not checked.';
+
+	if (misspellingCount >= CONTENT_POOR_THRESHOLD || grammarFindings >= CONTENT_POOR_THRESHOLD) {
+		return { word: 'Poor', tone: 'fail', finding };
+	}
+	if (misspellingCount > 0 || grammarFindings > 0) {
+		return { word: 'Needs work', tone: 'warn', finding };
+	}
+	return { word: 'Good', tone: 'ok', finding };
+}
+
 export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): Severity {
 	if (!result) return { word: 'Not run', tone: 'na', finding: 'This check was not run.' };
 
@@ -465,6 +561,8 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 	if (id === 'wayback' && isWayback(result.data)) return waybackSeverity(result.data);
 	if (id === 'security' && isSecurity(result.data)) return securitySeverity(result.data);
 	if (id === 'aeo' && isAeo(result.data)) return aeoSeverity(result.data);
+	if (id === 'seoquake' && isSeoQuake(result.data)) return seoQuakeSeverity(result.data);
+	if (id === 'content' && isContent(result.data)) return contentSeverity(result.data);
 
 	// A check with no component yet, or data in an unexpected shape: say it
 	// measured, and let the raw values below carry the detail.

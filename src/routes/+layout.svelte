@@ -7,7 +7,8 @@
 	// and the rail keeps the tool screens one click apart at all times.
 	const nav = [
 		{ href: '/', label: 'New report' },
-		{ href: '/runs', label: 'Runs' }
+		{ href: '/runs', label: 'Runs' },
+		{ href: '/settings', label: 'Settings' }
 	];
 
 	$: path = $page.url.pathname;

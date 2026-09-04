@@ -501,3 +501,132 @@ describe('severityOf — aeo', () => {
 		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
 	});
 });
+
+describe('severityOf — seoquake', () => {
+	const ok = (data: {
+		semrushRank?: number | null;
+		backlinks?: number | null;
+		linkingDomains?: number | null;
+		pinterest?: number | null;
+	}) => ({
+		status: 'ok' as const,
+		data: {
+			semrushRank: null,
+			backlinks: null,
+			linkingDomains: null,
+			pinterest: null,
+			raw: {},
+			...data
+		}
+	});
+
+	it('is No data when all four values are null', () => {
+		expect(severityOf('seoquake', ok({}))).toMatchObject({ word: 'No data', tone: 'na' });
+	});
+
+	it('is Measured when any value is present, using AU thousands separators', () => {
+		const s = severityOf(
+			'seoquake',
+			ok({ semrushRank: 12345, backlinks: 6789, linkingDomains: 42 })
+		);
+		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s.finding).toBe('Semrush rank 12,345; 6,789 backlinks from 42 domains.');
+	});
+
+	it('names missing parts as "no data" rather than omitting them', () => {
+		const s = severityOf('seoquake', ok({ semrushRank: 100 }));
+		expect(s.finding).toBe('Semrush rank 100; no data backlinks from no data domains.');
+	});
+});
+
+describe('severityOf — content', () => {
+	const misspelling = (word: string, count = 1) => ({ word, count, suggestions: [] });
+	const grammarOk = (findings: Array<{ message: string; context: string }>) => ({
+		status: 'ok' as const,
+		findings: findings.map((f) => ({ ...f, ruleId: 'X' }))
+	});
+	const ok = (misspellings: ReturnType<typeof misspelling>[], grammar: unknown) => ({
+		status: 'ok' as const,
+		data: { spelling: { misspellings }, grammar }
+	});
+
+	it('is Good with no misspellings and no grammar findings', () => {
+		const s = severityOf('content', ok([], grammarOk([])));
+		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
+	});
+
+	it('is Needs work with any misspelling', () => {
+		const s = severityOf('content', ok([misspelling('teh')], grammarOk([])));
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toMatch(/1 misspelling/);
+	});
+
+	it('is Needs work with any grammar finding', () => {
+		const s = severityOf(
+			'content',
+			ok([], grammarOk([{ message: 'Fix this', context: 'a phrase' }]))
+		);
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toMatch(/1 grammar issue/);
+	});
+
+	it('stays Needs work at 9 distinct misspellings', () => {
+		const misspellings = Array.from({ length: 9 }, (_, i) => misspelling(`word${i}`));
+		expect(severityOf('content', ok(misspellings, grammarOk([])))).toMatchObject({
+			word: 'Needs work',
+			tone: 'warn'
+		});
+	});
+
+	it('becomes Poor at 10 distinct misspellings', () => {
+		const misspellings = Array.from({ length: 10 }, (_, i) => misspelling(`word${i}`));
+		expect(severityOf('content', ok(misspellings, grammarOk([])))).toMatchObject({
+			word: 'Poor',
+			tone: 'fail'
+		});
+	});
+
+	it('stays Needs work at 9 grammar findings', () => {
+		const findings = Array.from({ length: 9 }, (_, i) => ({
+			message: `Issue ${i}`,
+			context: 'context'
+		}));
+		expect(severityOf('content', ok([], grammarOk(findings)))).toMatchObject({
+			word: 'Needs work',
+			tone: 'warn'
+		});
+	});
+
+	it('becomes Poor at 10 grammar findings', () => {
+		const findings = Array.from({ length: 10 }, (_, i) => ({
+			message: `Issue ${i}`,
+			context: 'context'
+		}));
+		expect(severityOf('content', ok([], grammarOk(findings)))).toMatchObject({
+			word: 'Poor',
+			tone: 'fail'
+		});
+	});
+
+	it('mentions both counts with plural wording', () => {
+		const s = severityOf(
+			'content',
+			ok([misspelling('teh'), misspelling('recieve')], grammarOk([{ message: 'x', context: 'y' }]))
+		);
+		expect(s.finding).toBe('2 misspellings and 1 grammar issue found.');
+	});
+
+	it('notes grammar was not checked when unavailable', () => {
+		const s = severityOf('content', ok([], { status: 'unavailable', reason: 'Turned off.' }));
+		expect(s.finding).toMatch(/Grammar was not checked\.$/);
+	});
+
+	it('a failed grammar check does not stop misspellings being reported', () => {
+		const s = severityOf(
+			'content',
+			ok([misspelling('teh')], { status: 'failed', error: 'net down' })
+		);
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toMatch(/1 misspelling/);
+	});
+});

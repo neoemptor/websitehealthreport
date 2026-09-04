@@ -9,6 +9,8 @@
 	import Wayback from '$lib/report/Wayback.svelte';
 	import Security from '$lib/report/Security.svelte';
 	import Aeo from '$lib/report/Aeo.svelte';
+	import SeoQuake from '$lib/report/SeoQuake.svelte';
+	import Content from '$lib/report/Content.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
 	import Summary from '$lib/report/Summary.svelte';
@@ -28,7 +30,9 @@
 		oldseo: OldSeo,
 		wayback: Wayback,
 		security: Security,
-		aeo: Aeo
+		aeo: Aeo,
+		seoquake: SeoQuake,
+		content: Content
 	};
 
 	let run: Run | null = null;

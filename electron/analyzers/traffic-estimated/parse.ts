@@ -44,9 +44,15 @@ export function classifyError(code: number): 'unavailable' | 'failed' {
 	return [120, 121, 130, 131, 132, 133, 134, 135].includes(code) ? 'unavailable' : 'failed';
 }
 
+/** Matches Semrush's "ERROR <code> :: MESSAGE" body format, without ever touching the query string. */
+export function errorCodeOf(body: string): number | null {
+	const match = body.match(/ERROR\s+(\d+)/i);
+	return match ? Number(match[1]) : null;
+}
+
 /** Quota exhaustion is a billing state, not a crash, so it maps to unavailable. */
 export function isQuotaError(body: string): boolean {
-	const match = body.match(/ERROR\s+(\d+)/i);
-	if (!match) return false;
-	return classifyError(Number(match[1])) === 'unavailable';
+	const code = errorCodeOf(body);
+	if (code === null) return false;
+	return classifyError(code) === 'unavailable';
 }

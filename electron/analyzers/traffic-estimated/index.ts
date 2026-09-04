@@ -1,7 +1,13 @@
 import type { Analyzer } from '../types';
 import type { CredentialStore } from '../../credentials';
 import { fetchText } from '../../http';
-import { classifyError, isQuotaError, parseSemrushCsv, toEstimatedTraffic } from './parse';
+import {
+	classifyError,
+	errorCodeOf,
+	isQuotaError,
+	parseSemrushCsv,
+	toEstimatedTraffic
+} from './parse';
 import type { EstimatedTrafficData } from './parse';
 
 export type TrafficEstimatedSettings = { database: string };
@@ -11,12 +17,6 @@ export type TrafficEstimatedData = EstimatedTrafficData & { nothingFound: boolea
 export const SEMRUSH_CREDENTIAL_KEY = 'semrush.apiKey';
 
 const ENDPOINT = 'https://api.semrush.com/';
-
-/** Matches Semrush's "ERROR <code> :: MESSAGE" body format, without ever touching the query string. */
-function matchErrorCode(body: string): number | null {
-	const match = body.match(/ERROR\s+(\d+)/i);
-	return match ? Number(match[1]) : null;
-}
 
 export function createTrafficEstimatedAnalyzer(
 	credentials: CredentialStore
@@ -51,15 +51,25 @@ export function createTrafficEstimatedAnalyzer(
 
 			// The key never reaches an error message or log line: on failure we
 			// report the HTTP status or the Semrush error code, never the URL.
-			const { status, body } = await fetchText(`${ENDPOINT}?${params.toString()}`, {
-				signal,
-				timeoutMs: 25_000
-			});
+			let status: number;
+			let body: string;
+			try {
+				({ status, body } = await fetchText(`${ENDPOINT}?${params.toString()}`, {
+					signal,
+					timeoutMs: 25_000
+				}));
+			} catch (err) {
+				const message = err instanceof Error ? err.message : String(err);
+				if (/^Aborted/.test(message) || /^Timed out/.test(message)) {
+					throw err;
+				}
+				throw new Error('The Semrush request could not be completed.');
+			}
 
 			// Running out of API units is a billing state the operator can fix, not
 			// a failure of the analyzer, so it is reported as unavailable.
 			if (isQuotaError(body)) {
-				const code = matchErrorCode(body);
+				const code = errorCodeOf(body);
 				throw new Error(`UNAVAILABLE: Semrush reported an account issue (error ${code ?? '?'}).`);
 			}
 
@@ -75,7 +85,7 @@ export function createTrafficEstimatedAnalyzer(
 				};
 			}
 
-			const code = matchErrorCode(body);
+			const code = errorCodeOf(body);
 			if (code !== null) {
 				const kind = classifyError(code);
 				throw new Error(

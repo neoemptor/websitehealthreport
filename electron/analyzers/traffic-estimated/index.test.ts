@@ -133,6 +133,33 @@ describe('traffic-estimated analyze', () => {
 		).rejects.toThrow('Semrush responded with status 503.');
 	});
 
+	it('never surfaces the raw fetchText rejection message, which may carry the request URL and key', async () => {
+		state.fetchTextResult = async () => {
+			throw new Error('fetch failed: https://api.semrush.com/?key=SECRET123');
+		};
+		const analyzer = createTrafficEstimatedAnalyzer(fakeStore('a-key') as never);
+		const controller = new AbortController();
+
+		const message = await analyzer
+			.analyze('https://example.com/', { database: 'au' }, controller.signal)
+			.catch((e: Error) => e.message);
+
+		expect(message).not.toContain('SECRET123');
+		expect(message).toBe('The Semrush request could not be completed.');
+	});
+
+	it('rethrows an Aborted rejection unchanged so the scheduler can rely on it', async () => {
+		state.fetchTextResult = async () => {
+			throw new Error('Aborted: user cancelled');
+		};
+		const analyzer = createTrafficEstimatedAnalyzer(fakeStore('a-key') as never);
+		const controller = new AbortController();
+
+		await expect(
+			analyzer.analyze('https://example.com/', { database: 'au' }, controller.signal)
+		).rejects.toThrow('Aborted: user cancelled');
+	});
+
 	it('never puts the API key in the request URL query value name, only as the key param value', async () => {
 		withBody(csvBody);
 		const analyzer = createTrafficEstimatedAnalyzer(fakeStore('a-key') as never);

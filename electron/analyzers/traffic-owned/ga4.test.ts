@@ -16,6 +16,10 @@ describe('parseGa4', () => {
 	it('handles a 403 response body shape without throwing during parse', () => {
 		expect(parseGa4({})).toEqual({ sessions: 0, users: 0, engagementRate: 0 });
 	});
+
+	it('handles a null payload without throwing', () => {
+		expect(parseGa4(null)).toEqual({ sessions: 0, users: 0, engagementRate: 0 });
+	});
 });
 
 describe('fetchGa4', () => {
@@ -42,8 +46,23 @@ describe('fetchGa4', () => {
 
 		expect(data).toEqual({ sessions: 10, users: 8, engagementRate: 0.5 });
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-		expect(url).toContain('analyticsdata.googleapis.com/v1beta/properties/');
+		expect(url).toBe('https://analyticsdata.googleapis.com/v1beta/properties/12345:runReport');
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret-token');
+	});
+
+	it('normalises a bare property id the same way', async () => {
+		const fetchMock = vi.fn(
+			async () => new Response(JSON.stringify({ rows: [] }), { status: 200 })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await fetchGa4('12345', 'secret-token', {
+			startDate: '2026-08-07',
+			endDate: '2026-09-03'
+		});
+
+		const [url] = fetchMock.mock.calls[0] as [string];
+		expect(url).toBe('https://analyticsdata.googleapis.com/v1beta/properties/12345:runReport');
 	});
 
 	it('throws a GA4-specific UNAVAILABLE message on 403', async () => {
@@ -112,6 +131,31 @@ describe('fetchGa4', () => {
 			throw new Error('expected fetchGa4 to reject');
 		} catch (err) {
 			expect((err as Error).message).not.toContain(token);
+		}
+	});
+
+	it('scrubs the access token out of a Google error message on 500', async () => {
+		const token = 'super-secret-access-token-xyz';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({
+							error: { status: 'INTERNAL', message: `something broke for token ${token}` }
+						}),
+						{ status: 500 }
+					)
+			)
+		);
+
+		try {
+			await fetchGa4('999', token, { startDate: '2026-08-07', endDate: '2026-09-03' });
+			throw new Error('expected fetchGa4 to reject');
+		} catch (err) {
+			const message = (err as Error).message;
+			expect(message).not.toContain(token);
+			expect(message).toContain('[token]');
 		}
 	});
 });

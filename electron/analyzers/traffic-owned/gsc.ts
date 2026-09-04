@@ -1,9 +1,15 @@
-export type GscData = {
+import { GoogleApiError, postGoogleJson, type DateRange } from './google-http';
+
+export type GscTotals = {
 	clicks: number;
 	impressions: number;
 	ctr: number;
 	position: number;
-	topQueries: Array<{ query: string; clicks: number }>;
+};
+
+export type GscData = {
+	totals: GscTotals;
+	topQueries: Array<{ query: string; clicks: number; impressions: number }>;
 };
 
 type Row = {
@@ -14,9 +20,7 @@ type Row = {
 	position?: number;
 };
 
-export function parseSearchAnalytics(payload: unknown): GscData {
-	const rows = ((payload as { rows?: Row[] }).rows ?? []).filter(Boolean);
-
+function totalsFromRows(rows: Row[]): GscTotals {
 	const clicks = rows.reduce((sum, row) => sum + (row.clicks ?? 0), 0);
 	const impressions = rows.reduce((sum, row) => sum + (row.impressions ?? 0), 0);
 
@@ -29,15 +33,30 @@ export function parseSearchAnalytics(payload: unknown): GscData {
 			impressions === 0
 				? 0
 				: rows.reduce((sum, row) => sum + (row.position ?? 0) * (row.impressions ?? 0), 0) /
-				  impressions,
-		topQueries: [...rows]
-			.sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0))
-			.slice(0, 10)
-			.map((row) => ({ query: row.keys?.[0] ?? '', clicks: row.clicks ?? 0 }))
+				  impressions
 	};
 }
 
-export type DateRange = { startDate: string; endDate: string };
+export function parseSearchAnalyticsTotals(payload: unknown): GscTotals {
+	const rows = ((payload ?? {}) as { rows?: Row[] }).rows ?? [];
+	return totalsFromRows(rows.filter(Boolean));
+}
+
+export function parseSearchAnalytics(payload: unknown): GscData {
+	const rows = ((payload ?? {}) as { rows?: Row[] }).rows?.filter(Boolean) ?? [];
+
+	return {
+		totals: totalsFromRows(rows),
+		topQueries: [...rows]
+			.sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0))
+			.slice(0, 10)
+			.map((row) => ({
+				query: row.keys?.[0] ?? '',
+				clicks: row.clicks ?? 0,
+				impressions: row.impressions ?? 0
+			}))
+	};
+}
 
 /**
  * The last 28 full days ending yesterday (UTC). Pure and exported so tests can
@@ -51,84 +70,14 @@ export function dateRange(now: Date): DateRange {
 	return { startDate: toIso(start), endDate: toIso(yesterday) };
 }
 
-const TIMEOUT_MS = 20_000;
-const BASE_URL = 'https://www.googleapis.com/webmasters/v3';
-
-type GoogleErrorBody = { error?: { status?: string; message?: string } };
-
-class GoogleApiError extends Error {
-	httpStatus: number;
-	googleStatus: string | null;
-	constructor(httpStatus: number, googleStatus: string | null, message: string) {
-		super(message);
-		this.name = 'GoogleApiError';
-		this.httpStatus = httpStatus;
-		this.googleStatus = googleStatus;
-	}
-}
+const BASE_URL = 'https://searchconsole.googleapis.com/webmasters/v3';
 
 /**
- * POSTs JSON to a Google API with a timeout and abort support. The access
- * token is only ever placed in the Authorization header — it is never
- * included in a thrown message, and a non-JSON error body never escapes as a
- * raw SyntaxError.
- */
-export async function postGoogleJson(
-	url: string,
-	accessToken: string,
-	body: unknown,
-	signal?: AbortSignal
-): Promise<unknown> {
-	if (signal?.aborted) {
-		throw new Error('Aborted: the task timed out or the run was cancelled.');
-	}
-
-	const controller = new AbortController();
-	let timedOut = false;
-	const timer = setTimeout(() => {
-		timedOut = true;
-		controller.abort();
-	}, TIMEOUT_MS);
-	const onAbort = (): void => controller.abort();
-	signal?.addEventListener('abort', onAbort);
-
-	try {
-		const response = await fetch(url, {
-			method: 'POST',
-			signal: controller.signal,
-			headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-			body: JSON.stringify(body)
-		});
-
-		if (!response.ok) {
-			const parsed = (await response.json().catch(() => ({}))) as GoogleErrorBody;
-			const status = parsed.error?.status ?? null;
-			const message = parsed.error?.message;
-			const detail = [status, message].filter(Boolean).join(': ');
-			throw new GoogleApiError(
-				response.status,
-				status,
-				`Google API request failed with HTTP ${response.status}${detail ? ` (${detail})` : ''}.`
-			);
-		}
-
-		return await response.json().catch(() => ({}));
-	} catch (err) {
-		if (timedOut) {
-			throw new Error('Aborted: the task timed out or the run was cancelled.');
-		}
-		throw err;
-	} finally {
-		clearTimeout(timer);
-		signal?.removeEventListener('abort', onAbort);
-	}
-}
-
-/**
- * Fetches Search Console totals for `host` (e.g. "example.com", no
- * protocol). Tries the `sc-domain:` domain property first, then the
- * URL-prefix property, since either may be the one the account has verified;
- * whichever answers 200 wins.
+ * Fetches Search Console totals and top queries for `host` (e.g.
+ * "example.com", no protocol). Tries the `sc-domain:` domain property first,
+ * then the URL-prefix property, since either may be the one the account has
+ * verified; whichever answers 200 wins, and both the totals query and the
+ * top-queries query then use that same property.
  */
 export async function fetchSearchAnalytics(
 	host: string,
@@ -139,14 +88,21 @@ export async function fetchSearchAnalytics(
 	const siteUrls = [`sc-domain:${host}`, `https://${host}/`];
 
 	for (const siteUrl of siteUrls) {
+		const endpoint = `${BASE_URL}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`;
 		try {
-			const payload = await postGoogleJson(
-				`${BASE_URL}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
+			const topQueriesPayload = await postGoogleJson(
+				endpoint,
 				accessToken,
 				{ ...range, dimensions: ['query'], rowLimit: 100 },
 				signal
 			);
-			return parseSearchAnalytics(payload);
+			// This property answered 200, so the dimensionless totals query for
+			// site-wide clicks/impressions/ctr/position uses the same property.
+			const totalsPayload = await postGoogleJson(endpoint, accessToken, { ...range }, signal);
+			return {
+				totals: parseSearchAnalyticsTotals(totalsPayload),
+				topQueries: parseSearchAnalytics(topQueriesPayload).topQueries
+			};
 		} catch (err) {
 			if (err instanceof GoogleApiError) {
 				if (err.httpStatus === 429) {

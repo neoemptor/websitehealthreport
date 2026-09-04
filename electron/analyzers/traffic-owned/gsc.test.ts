@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dateRange, fetchSearchAnalytics, parseSearchAnalytics } from './gsc';
-import { parseGa4 } from './ga4';
+import {
+	dateRange,
+	fetchSearchAnalytics,
+	parseSearchAnalytics,
+	parseSearchAnalyticsTotals
+} from './gsc';
 
-describe('parseSearchAnalytics', () => {
+describe('parseSearchAnalyticsTotals', () => {
 	it('totals clicks and impressions across rows', () => {
 		const payload = {
 			rows: [
@@ -10,11 +14,26 @@ describe('parseSearchAnalytics', () => {
 				{ keys: ['roller doors'], clicks: 5, impressions: 50, ctr: 0.1, position: 6 }
 			]
 		};
-		const data = parseSearchAnalytics(payload);
-		expect(data.clicks).toBe(15);
-		expect(data.impressions).toBe(150);
+		const totals = parseSearchAnalyticsTotals(payload);
+		expect(totals.clicks).toBe(15);
+		expect(totals.impressions).toBe(150);
 	});
 
+	it('returns zeroes when there are no rows', () => {
+		expect(parseSearchAnalyticsTotals({}).clicks).toBe(0);
+	});
+
+	it('handles a null payload without throwing', () => {
+		expect(parseSearchAnalyticsTotals(null)).toEqual({
+			clicks: 0,
+			impressions: 0,
+			ctr: 0,
+			position: 0
+		});
+	});
+});
+
+describe('parseSearchAnalytics', () => {
 	it('ranks top queries by clicks', () => {
 		const payload = {
 			rows: [
@@ -22,24 +41,23 @@ describe('parseSearchAnalytics', () => {
 				{ keys: ['a'], clicks: 9, impressions: 20, ctr: 0.45, position: 1 }
 			]
 		};
-		expect(parseSearchAnalytics(payload).topQueries[0]).toEqual({ query: 'a', clicks: 9 });
+		expect(parseSearchAnalytics(payload).topQueries[0]).toEqual({
+			query: 'a',
+			clicks: 9,
+			impressions: 20
+		});
 	});
 
 	it('returns zeroes when there are no rows', () => {
-		expect(parseSearchAnalytics({}).clicks).toBe(0);
-	});
-});
-
-describe('parseGa4', () => {
-	it('reads the first metric row', () => {
-		const payload = {
-			rows: [{ metricValues: [{ value: '120' }, { value: '95' }, { value: '0.62' }] }]
-		};
-		expect(parseGa4(payload)).toEqual({ sessions: 120, users: 95, engagementRate: 0.62 });
+		expect(parseSearchAnalytics({}).totals.clicks).toBe(0);
+		expect(parseSearchAnalytics({}).topQueries).toEqual([]);
 	});
 
-	it('returns zeroes when the property has no data', () => {
-		expect(parseGa4({ rows: [] })).toEqual({ sessions: 0, users: 0, engagementRate: 0 });
+	it('handles a null payload without throwing', () => {
+		expect(parseSearchAnalytics(null)).toEqual({
+			totals: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
+			topQueries: []
+		});
 	});
 });
 
@@ -61,7 +79,7 @@ describe('fetchSearchAnalytics', () => {
 		vi.unstubAllGlobals();
 	});
 
-	it('returns parsed data when the sc-domain property answers 200', async () => {
+	it('returns totals and top queries when the sc-domain property answers 200', async () => {
 		const fetchMock = vi.fn(
 			async () => new Response(JSON.stringify({ rows: [] }), { status: 200 })
 		);
@@ -72,10 +90,17 @@ describe('fetchSearchAnalytics', () => {
 			endDate: '2026-09-03'
 		});
 
-		expect(data.clicks).toBe(0);
-		expect(fetchMock).toHaveBeenCalledTimes(1);
-		const [url] = fetchMock.mock.calls[0] as [string];
-		expect(url).toContain(encodeURIComponent('sc-domain:example.com'));
+		expect(data).toEqual({
+			totals: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
+			topQueries: []
+		});
+		// One call for the top-queries query, one for the dimensionless totals query.
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		for (const call of fetchMock.mock.calls) {
+			const [url] = call as [string];
+			expect(url).toContain(encodeURIComponent('sc-domain:example.com'));
+			expect(url).toContain('https://searchconsole.googleapis.com/webmasters/v3');
+		}
 	});
 
 	it('falls back to the URL-prefix property when the domain property 404s', async () => {
@@ -84,6 +109,7 @@ describe('fetchSearchAnalytics', () => {
 			.mockResolvedValueOnce(
 				new Response(JSON.stringify({ error: { status: 'NOT_FOUND' } }), { status: 404 })
 			)
+			.mockResolvedValueOnce(new Response(JSON.stringify({ rows: [] }), { status: 200 }))
 			.mockResolvedValueOnce(new Response(JSON.stringify({ rows: [] }), { status: 200 }));
 		vi.stubGlobal('fetch', fetchMock);
 
@@ -92,10 +118,12 @@ describe('fetchSearchAnalytics', () => {
 			endDate: '2026-09-03'
 		});
 
-		expect(data.clicks).toBe(0);
-		expect(fetchMock).toHaveBeenCalledTimes(2);
-		const [, secondUrl] = fetchMock.mock.calls.map((call) => call[0] as string);
-		expect(secondUrl).toContain(encodeURIComponent('https://example.com/'));
+		expect(data.totals.clicks).toBe(0);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		const urls = fetchMock.mock.calls.map((call) => call[0] as string);
+		expect(urls[0]).toContain(encodeURIComponent('sc-domain:example.com'));
+		expect(urls[1]).toContain(encodeURIComponent('https://example.com/'));
+		expect(urls[2]).toContain(encodeURIComponent('https://example.com/'));
 	});
 
 	it('throws the site-access UNAVAILABLE message when both properties 403', async () => {
@@ -173,6 +201,34 @@ describe('fetchSearchAnalytics', () => {
 			throw new Error('expected fetchSearchAnalytics to reject');
 		} catch (err) {
 			expect((err as Error).message).not.toContain(token);
+		}
+	});
+
+	it('scrubs the access token out of a Google error message on 500', async () => {
+		const token = 'super-secret-access-token-xyz';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({
+							error: { status: 'INTERNAL', message: `something broke for token ${token}` }
+						}),
+						{ status: 500 }
+					)
+			)
+		);
+
+		try {
+			await fetchSearchAnalytics('example.com', token, {
+				startDate: '2026-08-07',
+				endDate: '2026-09-03'
+			});
+			throw new Error('expected fetchSearchAnalytics to reject');
+		} catch (err) {
+			const message = (err as Error).message;
+			expect(message).not.toContain(token);
+			expect(message).toContain('[token]');
 		}
 	});
 });

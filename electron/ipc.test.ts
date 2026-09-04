@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -288,94 +288,59 @@ describe('client identity during a run', () => {
 		credentials: credentials()
 	});
 
-	it('treats the run client as the client and a competitor as not, then forgets it', async () => {
-		const handlers = buildHandlers(base());
+	// Which row is the client is decided from the run itself, so the proof is
+	// in the run's own stored results: the competitor's measured-traffic cell
+	// carries the client-only reason, and the client's does not.
+	it('gives a competitor the client-only cell and the client a different one', async () => {
+		const store = credentials();
+		await store.set('google.clientId', 'client-id');
+		await store.set('google.clientSecret', 'client-secret');
 
+		const handlers = buildHandlers({ ...base(), credentials: store });
 		const run = await handlers.startRun({
 			client: 'example.com',
 			competitors: ['rival.com'],
-			enabledAnalyzers: []
-		});
-
-		expect(handlers.isClient('https://example.com/')).toBe(true);
-		expect(handlers.isClient('https://rival.com/')).toBe(false);
-
-		await handlers.settled(run.id);
-		// The removal is fired and forgotten after settled, so give it a turn.
-		await new Promise((r) => setTimeout(r, 5));
-		expect(handlers.isClient('https://example.com/')).toBe(false);
-	});
-
-	it('re-registers the client when a run is resumed', async () => {
-		const handlers = buildHandlers(base());
-		const run = await handlers.startRun({
-			client: 'example.com',
-			competitors: [],
-			enabledAnalyzers: []
+			enabledAnalyzers: ['traffic-owned']
 		});
 		await handlers.settled(run.id);
-		await new Promise((r) => setTimeout(r, 5));
 
-		await handlers.resumeRun(run.id);
-		expect(handlers.isClient('https://example.com/')).toBe(true);
+		const stored = await handlers.loadRun(run.id);
+		const clientOnly = /only available for the client's own site/;
+
+		const competitor = stored.domains.find((d) => d.role === 'competitor');
+		expect(competitor?.analyzers['traffic-owned']).toMatchObject({ status: 'unavailable' });
+		expect((competitor?.analyzers['traffic-owned'] as { reason: string }).reason).toMatch(
+			clientOnly
+		);
+
+		// The client is never refused for being a competitor. With no Google
+		// account connected it still cannot be measured, but for a different
+		// reason — the connection, not the identity.
+		const client = stored.domains.find((d) => d.role === 'client');
+		const clientCell = client?.analyzers['traffic-owned'] as
+			| { status: string; reason?: string; error?: string }
+			| undefined;
+		expect(clientCell?.reason ?? clientCell?.error ?? '').not.toMatch(clientOnly);
 	});
+});
 
-	it('keeps a shared client registered until both overlapping runs settle', async () => {
-		const handlers = buildHandlers(base());
+describe('disconnectGoogle', () => {
+	it("removes only that site's refresh token", async () => {
+		const store = credentials();
+		await store.set('google.refresh.example.com', 'token-a');
+		await store.set('google.refresh.rival.com', 'token-b');
 
-		// The second run is given a real analyzer (wayback) whose single network
-		// call is held open below, so it reliably outlasts the first run, which
-		// has no analyzers and settles immediately — with both empty, they would
-		// otherwise race to settle at the same instant and the test could not
-		// tell "one settled" from "both settled".
-		let releaseSecond = () => {};
-		const secondGate = new Promise<void>((resolve) => (releaseSecond = resolve));
-		const fetchMock = vi.fn(async (url: string) => {
-			if (typeof url === 'string' && url.includes('web.archive.org')) {
-				await secondGate;
-				return new Response('', { status: 200 });
-			}
-			throw new Error(`Unexpected fetch in this test: ${url}`);
+		const handlers = buildHandlers({
+			userDataDir: dir,
+			emitProgress: () => {},
+			logger: { info: () => {}, error: () => {} },
+			credentials: store
 		});
-		vi.stubGlobal('fetch', fetchMock);
 
-		try {
-			const first = await handlers.startRun({
-				client: 'example.com',
-				competitors: [],
-				enabledAnalyzers: []
-			});
+		// A bare domain and a www spelling both resolve to the same key.
+		await handlers.disconnectGoogle('www.example.com');
 
-			// Written directly rather than via startRun, since makeRunId is only
-			// second-granular and the two would otherwise collide.
-			const secondId = '2020-01-01T000000-example-com';
-			await fs.mkdir(path.join(dir, 'runs'), { recursive: true });
-			await fs.writeFile(
-				path.join(dir, 'runs', `${secondId}.json`),
-				JSON.stringify({
-					id: secondId,
-					createdAt: new Date(0).toISOString(),
-					client: 'https://example.com/',
-					competitors: [],
-					enabledAnalyzers: ['wayback'],
-					status: 'aborted',
-					domains: [{ domain: 'https://example.com/', role: 'client', analyzers: {} }]
-				})
-			);
-			await handlers.resumeRun(secondId);
-
-			expect(handlers.isClient('https://example.com/')).toBe(true);
-
-			await handlers.settled(first.id);
-			// The other run sharing this client is still mid-flight.
-			expect(handlers.isClient('https://example.com/')).toBe(true);
-
-			releaseSecond();
-			await handlers.settled(secondId);
-			await new Promise((r) => setTimeout(r, 5));
-			expect(handlers.isClient('https://example.com/')).toBe(false);
-		} finally {
-			vi.unstubAllGlobals();
-		}
+		expect(await store.has('google.refresh.example.com')).toBe(false);
+		expect(await store.has('google.refresh.rival.com')).toBe(true);
 	});
 });

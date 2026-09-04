@@ -58,18 +58,6 @@ export function parseSearchAnalytics(payload: unknown): GscData {
 	};
 }
 
-/**
- * The last 28 full days ending yesterday (UTC). Pure and exported so tests can
- * pin `now` rather than depending on the clock.
- */
-export function dateRange(now: Date): DateRange {
-	const toIso = (d: Date): string => d.toISOString().slice(0, 10);
-	const endOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-	const yesterday = new Date(endOfToday - 24 * 60 * 60 * 1000);
-	const start = new Date(yesterday.getTime() - 27 * 24 * 60 * 60 * 1000);
-	return { startDate: toIso(start), endDate: toIso(yesterday) };
-}
-
 const BASE_URL = 'https://searchconsole.googleapis.com/webmasters/v3';
 
 /**

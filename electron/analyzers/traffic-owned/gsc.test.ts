@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-	dateRange,
-	fetchSearchAnalytics,
-	parseSearchAnalytics,
-	parseSearchAnalyticsTotals
-} from './gsc';
+import { fetchSearchAnalytics, parseSearchAnalytics, parseSearchAnalyticsTotals } from './gsc';
 
 describe('parseSearchAnalyticsTotals', () => {
 	it('totals clicks and impressions across rows', () => {
@@ -58,19 +53,6 @@ describe('parseSearchAnalytics', () => {
 			totals: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
 			topQueries: []
 		});
-	});
-});
-
-describe('dateRange', () => {
-	it('spans the last 28 full days ending yesterday, UTC', () => {
-		const range = dateRange(new Date('2026-09-04T08:00:00Z'));
-		expect(range).toEqual({ startDate: '2026-08-07', endDate: '2026-09-03' });
-	});
-
-	it('is not affected by the time of day', () => {
-		const a = dateRange(new Date('2026-09-04T00:00:01Z'));
-		const b = dateRange(new Date('2026-09-04T23:59:59Z'));
-		expect(a).toEqual(b);
 	});
 });
 

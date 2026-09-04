@@ -66,6 +66,8 @@ export function registerIpc(deps: {
 	ipcMain.handle('cred:has', wrap('cred:has', handlers.hasCredential));
 	ipcMain.handle('cred:remove', wrap('cred:remove', handlers.removeCredential));
 
+	ipcMain.handle('google:disconnect', wrap('google:disconnect', handlers.disconnectGoogle));
+
 	ipcMain.handle(
 		'google:authorise',
 		wrap('google:authorise', async (rawDomain: string) => {
@@ -86,6 +88,10 @@ export function registerIpc(deps: {
 				height: 800,
 				webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
 			});
+			// Consent is the only thing this window is for: a link that tries to
+			// open a new window (Google's help and privacy links) must not spawn
+			// an uncontrolled browser window inside the app.
+			authWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
 			try {
 				const code = await new Promise<string>((resolve, reject) => {

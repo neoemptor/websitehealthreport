@@ -626,7 +626,7 @@ function trafficEstimatedSeverity(d: TrafficEstimatedData): Severity {
 		finding = 'Semrush has an estimate for this site, but no visits or keyword figures.';
 	}
 
-	return { word: 'Measured', tone: 'ok', finding };
+	return { word: 'Estimated', tone: 'ok', finding };
 }
 
 function isSourceResult<T>(v: unknown, isData: (d: unknown) => d is T): v is SourceResult<T> {
@@ -685,7 +685,10 @@ function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
 		)} impressions in the last ${plural(days, 'day')}`;
 		return {
 			word: 'Measured',
-			tone: 'ok',
+			// Tone 'na', not 'ok': only the client can ever have this reading, so
+			// letting it score would lift the client's grade above a competitor's
+			// for a check the competitor was never eligible for.
+			tone: 'na',
 			finding: `${base}; ${d.ga4.data.sessions.toLocaleString('en-AU')} GA4 sessions.`
 		};
 	}
@@ -694,7 +697,10 @@ function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
 		const { clicks, impressions } = d.searchConsole.data.totals;
 		return {
 			word: 'Measured',
-			tone: 'ok',
+			// Tone 'na', not 'ok': only the client can ever have this reading, so
+			// letting it score would lift the client's grade above a competitor's
+			// for a check the competitor was never eligible for.
+			tone: 'na',
 			finding: `${clicks.toLocaleString('en-AU')} clicks from ${impressions.toLocaleString(
 				'en-AU'
 			)} impressions in the last ${plural(days, 'day')}. GA4 is not connected.`
@@ -704,7 +710,10 @@ function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
 	if (d.searchConsole.status === 'unavailable' && d.ga4.status === 'ok') {
 		return {
 			word: 'Measured',
-			tone: 'ok',
+			// Tone 'na', not 'ok': only the client can ever have this reading, so
+			// letting it score would lift the client's grade above a competitor's
+			// for a check the competitor was never eligible for.
+			tone: 'na',
 			finding: `${d.ga4.data.sessions.toLocaleString('en-AU')} GA4 sessions in the last ${plural(
 				days,
 				'day'
@@ -728,6 +737,27 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 	// install hint, a network code — and the run screen shows it to them. The
 	// client's document says only what a client can act on: whether the site
 	// was measured, and that the gap is ours, not theirs.
+	// Measured traffic is the one check a competitor can never have: nobody
+	// grants us access to a rival's Search Console. That is a property of the
+	// data, not a gap in the report, so it is said plainly rather than being
+	// flattened into the generic "could not run" sentence below.
+	if (result.status === 'unavailable' && id === 'traffic-owned') {
+		const reason = result.reason ?? '';
+		if (/only available for the client's own site/i.test(reason)) {
+			return {
+				word: 'Client only',
+				tone: 'na',
+				finding:
+					"Measured traffic is read only for the client site, with its owner's permission; competitors are never read this way."
+			};
+		}
+		return {
+			word: 'Not connected',
+			tone: 'na',
+			finding: reason || 'No Google account is connected for this site.'
+		};
+	}
+
 	if (result.status === 'unavailable')
 		return {
 			word: 'Not measured',

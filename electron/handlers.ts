@@ -12,6 +12,7 @@ import { contentAnalyzer } from './analyzers/content';
 import { createTrafficEstimatedAnalyzer } from './analyzers/traffic-estimated';
 import { createTrafficOwnedAnalyzer } from './analyzers/traffic-owned';
 import type { CredentialStore } from './credentials';
+import { refreshTokenKey } from './analyzers/traffic-owned/oauth';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -65,23 +66,6 @@ export type StartRunInput = {
 };
 
 export function buildHandlers(deps: HandlerDeps) {
-	// Owned traffic is read only for the site whose owner connected their
-	// Google account, so the analyzer needs to know which domain in a run is
-	// the client. Keyed by normalised client URL, holding a refcount of the
-	// runs currently executing for that client — two overlapping runs sharing
-	// a client (e.g. a resume racing a fresh start) must both settle before
-	// the client stops being a client.
-	const clientsInFlight = new Map<string, number>();
-	const isClient = (domain: string): boolean => (clientsInFlight.get(domain) ?? 0) > 0;
-	const addClientInFlight = (domain: string): void => {
-		clientsInFlight.set(domain, (clientsInFlight.get(domain) ?? 0) + 1);
-	};
-	const removeClientInFlight = (domain: string): void => {
-		const count = clientsInFlight.get(domain) ?? 0;
-		if (count <= 1) clientsInFlight.delete(domain);
-		else clientsInFlight.set(domain, count - 1);
-	};
-
 	const registry = createRegistry([
 		lighthouseAnalyzer,
 		keywordsAnalyzer,
@@ -92,7 +76,7 @@ export function buildHandlers(deps: HandlerDeps) {
 		seoQuakeAnalyzer,
 		contentAnalyzer,
 		createTrafficEstimatedAnalyzer(deps.credentials),
-		createTrafficOwnedAnalyzer(deps.credentials, isClient)
+		createTrafficOwnedAnalyzer(deps.credentials)
 	]);
 	const storage = new RunStorage(deps.userDataDir);
 	const settingsStore = new SettingsStore(deps.userDataDir);
@@ -105,15 +89,6 @@ export function buildHandlers(deps: HandlerDeps) {
 		timeoutMs: deps.discovery?.timeoutMs
 	};
 	const probeClaude = deps.discovery?.findClaude ?? findClaude;
-
-	// Fire-and-forget: startRun must return as soon as the run exists, so the
-	// client is forgotten on a later turn rather than blocking the caller.
-	const forgetClientWhenSettled = (id: string, client: string): void => {
-		void orchestrator
-			.settled(id)
-			.catch(() => undefined)
-			.finally(() => removeClientInFlight(client));
-	};
 
 	// One discovery at a time: a second click replaces the first, and the
 	// replaced request reports cancelled rather than racing to the panel.
@@ -138,34 +113,21 @@ export function buildHandlers(deps: HandlerDeps) {
 			const settings = await settingsStore.read();
 
 			deps.logger.info('run:start', { client, competitors });
-			addClientInFlight(client);
 			const run = await orchestrator.start({
 				client,
 				competitors,
 				enabledAnalyzers: input.enabledAnalyzers,
 				settings: settings.analyzers
 			});
-			forgetClientWhenSettled(run.id, client);
 			return run;
 		},
 
 		async resumeRun(id: string): Promise<Run> {
 			const runId = assertRunId(id);
 			const settings = await settingsStore.read();
-			// The client is only known from the stored run, so it is read before
-			// the resume rather than passed in.
-			const existing = await storage.load(runId);
-			addClientInFlight(existing.client);
 			const run = await orchestrator.resume(runId, settings.analyzers);
-			forgetClientWhenSettled(run.id, existing.client);
 			return run;
 		},
-
-		/**
-		 * Not exposed over IPC. The registry closes over this, and tests assert
-		 * that a run's client is a client for the life of the run.
-		 */
-		isClient,
 
 		async setCredential(key: string, value: string): Promise<void> {
 			await deps.credentials.set(assertCredentialKey(key), value);
@@ -179,6 +141,18 @@ export function buildHandlers(deps: HandlerDeps) {
 
 		async removeCredential(key: string): Promise<void> {
 			await deps.credentials.remove(assertCredentialKey(key));
+		},
+
+		/**
+		 * Forgets a client site's Google connection. The refresh token is the
+		 * only thing that connection consists of, so removing it is the whole
+		 * disconnect — the next run for this site reports "not connected"
+		 * rather than reading stale credentials.
+		 */
+		async disconnectGoogle(rawDomain: string): Promise<void> {
+			const domain = normaliseDomain(rawDomain);
+			deps.logger.info('google:disconnect', { domain });
+			await deps.credentials.remove(refreshTokenKey(domain));
 		},
 
 		async cancelRun(id: string): Promise<void> {

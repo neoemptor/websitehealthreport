@@ -170,8 +170,10 @@ export function estimatedView(data: unknown): EstimatedView {
 	}
 	if (organicCost !== null) {
 		rows.push({
-			label: 'Monthly ad spend (estimate)',
-			value: `$${organicCost.toLocaleString('en-AU')}`
+			// Semrush's "organic cost" is what this traffic would cost to buy as
+			// ads, not what the site spends — and Semrush reports it in USD.
+			label: 'Value of that traffic if bought as ads (estimate)',
+			value: `US$${organicCost.toLocaleString('en-AU')}`
 		});
 	}
 

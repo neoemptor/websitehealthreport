@@ -139,7 +139,7 @@ describe('estimatedView', () => {
 			{ label: 'Monthly visits (estimate)', value: '12,345' },
 			{ label: 'Organic keywords (estimate)', value: '678' },
 			{ label: 'Advertised keywords (estimate)', value: '12' },
-			{ label: 'Monthly ad spend (estimate)', value: '$99' }
+			{ label: 'Value of that traffic if bought as ads (estimate)', value: 'US$99' }
 		]);
 	});
 

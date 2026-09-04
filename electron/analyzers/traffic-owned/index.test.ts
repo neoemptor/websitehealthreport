@@ -68,16 +68,18 @@ function noCredentialsStore(): FakeStore {
 }
 
 const CLIENT_DOMAIN = 'https://client.example.com/';
-const settings = { ga4PropertyIds: { 'client.example.com': 'properties/123' }, days: 90 };
+// clientUrl is injected per run by the orchestrator, alongside the stored
+// settings — that is how the analyzer knows which row is the client.
+const settings = {
+	ga4PropertyIds: { 'client.example.com': 'properties/123' },
+	days: 90,
+	clientUrl: CLIENT_DOMAIN
+};
 const COMPETITOR_DOMAIN = 'https://competitor.example.com/';
-
-function isClient(domain: string): boolean {
-	return domain === CLIENT_DOMAIN;
-}
 
 describe('traffic-owned preflight', () => {
 	it('reports unavailable when Google client credentials are not stored', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(noCredentialsStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(noCredentialsStore() as CredentialStore);
 		expect(await analyzer.preflight(settings)).toEqual({
 			available: false,
 			reason: 'Google has not been set up in Settings.'
@@ -85,14 +87,14 @@ describe('traffic-owned preflight', () => {
 	});
 
 	it('reports available when Google client credentials are stored', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		expect(await analyzer.preflight(settings)).toEqual({ available: true });
 	});
 });
 
 describe('traffic-owned analyze', () => {
 	it('throws UNAVAILABLE for a competitor domain', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(COMPETITOR_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/^UNAVAILABLE: Owned traffic is only available for the client's own site/
@@ -100,8 +102,28 @@ describe('traffic-owned analyze', () => {
 		expect(state.accessToken).not.toHaveBeenCalled();
 	});
 
+	it('throws UNAVAILABLE when no client site was injected for the run', async () => {
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
+		const controller = new AbortController();
+		await expect(
+			analyzer.analyze(CLIENT_DOMAIN, { ga4PropertyIds: {}, days: 90 }, controller.signal)
+		).rejects.toThrow(/^UNAVAILABLE: Owned traffic is only available for the client's own site/);
+		expect(state.accessToken).not.toHaveBeenCalled();
+	});
+
+	it('matches the client on a differently-spelled but equivalent URL', async () => {
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
+		const controller = new AbortController();
+		const result = await analyzer.analyze(
+			CLIENT_DOMAIN,
+			{ ...settings, clientUrl: 'client.example.com' },
+			controller.signal
+		);
+		expect(result.searchConsole.status).toBe('ok');
+	});
+
 	it('assembles data when both sources are ok', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -120,11 +142,11 @@ describe('traffic-owned analyze', () => {
 	});
 
 	it('reports GA4 as unavailable with no property id, while GSC still runs', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(
 			CLIENT_DOMAIN,
-			{ ga4PropertyIds: {}, days: 90 },
+			{ ga4PropertyIds: {}, days: 90, clientUrl: CLIENT_DOMAIN },
 			controller.signal
 		);
 
@@ -142,7 +164,7 @@ describe('traffic-owned analyze', () => {
 				'UNAVAILABLE: The connected Google account does not have access to this site in Search Console.'
 			)
 		);
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -155,7 +177,7 @@ describe('traffic-owned analyze', () => {
 
 	it('rethrows a non-UNAVAILABLE Search Console error so the cell reports failed', async () => {
 		state.fetchSearchAnalytics.mockRejectedValueOnce(new Error('boom'));
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/boom/
@@ -164,7 +186,7 @@ describe('traffic-owned analyze', () => {
 
 	it('rethrows a non-UNAVAILABLE GA4 error so the cell reports failed', async () => {
 		state.fetchGa4.mockRejectedValueOnce(new Error('boom'));
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/boom/
@@ -175,7 +197,7 @@ describe('traffic-owned analyze', () => {
 		state.accessToken.mockRejectedValueOnce(
 			new Error("UNAVAILABLE: This site's Google account has not been connected in Settings.")
 		);
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/^UNAVAILABLE: This site's Google account has not been connected/
@@ -185,7 +207,7 @@ describe('traffic-owned analyze', () => {
 	});
 
 	it('passes the abort signal through to both Google clients', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore);
 		const controller = new AbortController();
 		await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -212,7 +234,7 @@ describe('traffic-owned analyze', () => {
 
 	it('computes a 90-day range ending yesterday UTC from an injected now', async () => {
 		const now = new Date('2026-09-04T12:00:00.000Z');
-		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient, {
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, {
 			now: () => now
 		});
 		const controller = new AbortController();
@@ -239,8 +261,7 @@ describe('traffic-owned analyze', () => {
 			new Error(`UNAVAILABLE: token refresh failed for ${secret}`)
 		);
 		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore({ [CLIENT_SECRET_KEY]: secret }) as CredentialStore,
-			isClient
+			fakeStore({ [CLIENT_SECRET_KEY]: secret }) as CredentialStore
 		);
 		const controller = new AbortController();
 

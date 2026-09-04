@@ -28,6 +28,7 @@ export type WhrApi = {
 	hasCredential(key: string): Promise<boolean>;
 	removeCredential(key: string): Promise<void>;
 	authoriseGoogle(domain: string): Promise<void>;
+	disconnectGoogle(domain: string): Promise<void>;
 };
 
 const api: WhrApi = {
@@ -50,7 +51,8 @@ const api: WhrApi = {
 	setCredential: (key, value) => ipcRenderer.invoke('cred:set', key, value),
 	hasCredential: (key) => ipcRenderer.invoke('cred:has', key),
 	removeCredential: (key) => ipcRenderer.invoke('cred:remove', key),
-	authoriseGoogle: (domain) => ipcRenderer.invoke('google:authorise', domain)
+	authoriseGoogle: (domain) => ipcRenderer.invoke('google:authorise', domain),
+	disconnectGoogle: (domain) => ipcRenderer.invoke('google:disconnect', domain)
 };
 
 contextBridge.exposeInMainWorld('api', api);

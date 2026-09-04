@@ -688,9 +688,9 @@ describe('severityOf — traffic-estimated', () => {
 		});
 	});
 
-	it('is Measured with visits and keyword count when figures are present', () => {
+	it('is Estimated with visits and keyword count when figures are present', () => {
 		const s = severityOf('traffic-estimated', ok({ organicTraffic: 12345, organicKeywords: 678 }));
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
 		expect(s.finding).toBe('About 12,345 visits a month (estimate), ranking for 678 keywords.');
 	});
 
@@ -701,14 +701,14 @@ describe('severityOf — traffic-estimated', () => {
 
 	it('omits the visits clause when organicTraffic is null', () => {
 		const s = severityOf('traffic-estimated', ok({ organicKeywords: 678 }));
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
 		expect(s.finding).toBe('Ranking for 678 keywords (estimate).');
 		expect(s.finding).not.toMatch(/0 visits/);
 	});
 
 	it('omits the keywords clause when organicKeywords is null', () => {
 		const s = severityOf('traffic-estimated', ok({ organicTraffic: 12345 }));
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
 		expect(s.finding).toBe('About 12,345 visits a month (estimate).');
 	});
 
@@ -747,7 +747,7 @@ describe('severityOf — traffic-owned', () => {
 			status: 'ok',
 			data: { searchConsole: gsc(1234, 56789), ga4: ga4(4321), range }
 		});
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
 		expect(s.finding).toBe(
 			'1,234 clicks from 56,789 impressions in the last 90 days; 4,321 GA4 sessions.'
 		);
@@ -758,7 +758,7 @@ describe('severityOf — traffic-owned', () => {
 			status: 'ok',
 			data: { searchConsole: gsc(10, 100), ga4: unavailable('No GA4 property id is set.'), range }
 		});
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
 		expect(s.finding).toBe(
 			'10 clicks from 100 impressions in the last 90 days. GA4 is not connected.'
 		);
@@ -773,7 +773,7 @@ describe('severityOf — traffic-owned', () => {
 				range
 			}
 		});
-		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
 		expect(s.finding).toBe(
 			'999 GA4 sessions in the last 90 days; Search Console is not connected.'
 		);
@@ -787,6 +787,32 @@ describe('severityOf — traffic-owned', () => {
 				ga4: unavailable('No GA4 property id is set for this site in Settings.'),
 				range
 			}
+		});
+		expect(s).toEqual({
+			word: 'Not connected',
+			tone: 'na',
+			finding: 'Google has not been set up in Settings.'
+		});
+	});
+
+	it('names the client-only rule when a competitor cell is unavailable', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'unavailable',
+			reason:
+				"Owned traffic is only available for the client's own site, with its owner's permission."
+		});
+		expect(s).toEqual({
+			word: 'Client only',
+			tone: 'na',
+			finding:
+				"Measured traffic is read only for the client site, with its owner's permission; competitors are never read this way."
+		});
+	});
+
+	it('passes through any other unavailable reason as Not connected', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'unavailable',
+			reason: 'Google has not been set up in Settings.'
 		});
 		expect(s).toEqual({
 			word: 'Not connected',

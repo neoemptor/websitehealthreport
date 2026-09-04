@@ -22,4 +22,6 @@ export type TrafficOwnedSettings = {
 	/** GA4 property id per site, keyed by hostname with no leading www. */
 	ga4PropertyIds: Record<string, string>;
 	days: number;
+	/** Injected per run by the orchestrator; never stored in settings.json. */
+	clientUrl?: string;
 };

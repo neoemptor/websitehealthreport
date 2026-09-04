@@ -108,6 +108,24 @@
 		}
 	}
 
+	async function disconnectGoogleAccount() {
+		const domain = connectDomain.trim();
+		if (domain.length === 0) {
+			connectStatus = 'Enter the site to disconnect.';
+			return;
+		}
+		connecting = true;
+		try {
+			await api().disconnectGoogle(domain);
+			connectStatus = `Disconnected ${domain}.`;
+			connectDomain = '';
+		} catch (e) {
+			connectStatus = (e as Error).message;
+		} finally {
+			connecting = false;
+		}
+	}
+
 	function normaliseHost(value: string): string {
 		const trimmed = value.trim();
 		if (trimmed.length === 0) return '';
@@ -413,6 +431,13 @@
 						disabled={connecting}
 					>
 						Connect Google account
+					</button>
+					<button
+						class="btn btn-quiet py-2 px-4 text-[13px]"
+						on:click={disconnectGoogleAccount}
+						disabled={connecting}
+					>
+						Disconnect
 					</button>
 					{#if connectStatus}
 						<span class="text-[12.5px] text-white/50">{connectStatus}</span>

@@ -1,5 +1,6 @@
 import type { Analyzer } from '../types';
 import type { CredentialStore } from '../../credentials';
+import { normaliseDomain } from '../../../src/lib/shared/url';
 import type { DateRange } from './google-http';
 import { accessTokenFor } from './oauth';
 import { fetchSearchAnalytics, type GscData } from './gsc';
@@ -9,6 +10,12 @@ export type TrafficOwnedSettings = {
 	/** GA4 property id per site, keyed by hostname with no leading www. */
 	ga4PropertyIds: Record<string, string>;
 	days: number;
+	/**
+	 * The client site of the run this analysis belongs to, injected per run by
+	 * the orchestrator. Owned traffic is read only for the client, and which
+	 * domain that is belongs to the run, not to the process.
+	 */
+	clientUrl?: string;
 };
 
 export type SourceResult<T> = { status: 'ok'; data: T } | { status: 'unavailable'; reason: string };
@@ -37,6 +44,16 @@ function hostOf(domain: string): string {
 
 const UNAVAILABLE_PREFIX = /^UNAVAILABLE:\s*/;
 
+// normaliseDomain throws on anything it cannot read as a site. A settings
+// value that isn't a URL must read as "not the client", never as a crash.
+function sameSite(a: string, b: string): boolean {
+	try {
+		return normaliseDomain(a) === normaliseDomain(b);
+	} catch {
+		return false;
+	}
+}
+
 // Defence in depth: neither the Google client secret nor a bearer token
 // should ever reach a user-facing message, but errors can originate from
 // several layers (Google's own API, the OAuth token endpoint). Scrubbing
@@ -59,23 +76,16 @@ function unavailableReasonOf(error: unknown, secrets: Array<string | null | unde
 	return scrubSecrets(message.replace(UNAVAILABLE_PREFIX, ''), secrets);
 }
 
-/**
- * Owned traffic (Search Console + GA4) is client-only by construction: the
- * analyzer only ever receives a domain, so it needs a way to tell the run's
- * client apart from a competitor. `isClient` is that dependency, wired by the
- * run orchestrator rather than passed through settings.
- */
 export type TrafficOwnedDeps = { now?: () => Date };
 
 export function createTrafficOwnedAnalyzer(
 	credentials: CredentialStore,
-	isClient: (domain: string) => boolean,
 	deps: TrafficOwnedDeps = {}
 ): Analyzer<TrafficOwnedSettings> {
 	const now = deps.now ?? ((): Date => new Date());
 	return {
 		id: 'traffic-owned',
-		label: 'Traffic (owned)',
+		label: 'Traffic (measured)',
 		concurrency: 'parallel',
 		timeoutMs: 60_000,
 		defaultSettings: { ga4PropertyIds: {}, days: 90 },
@@ -91,7 +101,12 @@ export function createTrafficOwnedAnalyzer(
 		async analyze(domain, settings, signal): Promise<OwnedTrafficData> {
 			// Competitors never grant access. This is a property of the data, not
 			// a failure, and the report presents it as client-only rather than a gap.
-			if (!isClient(domain)) {
+			// Both sides are normalised: the run stores a normalised client URL
+			// and the row domain comes from the same run, but normalising again
+			// keeps a hand-written setting or an older run file from silently
+			// turning the client into a competitor.
+			const clientUrl = settings.clientUrl;
+			if (!clientUrl || !sameSite(domain, clientUrl)) {
 				throw new Error(
 					"UNAVAILABLE: Owned traffic is only available for the client's own site, with its owner's permission."
 				);

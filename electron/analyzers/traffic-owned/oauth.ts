@@ -11,6 +11,15 @@ const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const TOKEN_TIMEOUT_MS = 20_000;
 
+export class TokenError extends Error {
+	code: string | null;
+	constructor(message: string, code: string | null) {
+		super(message);
+		this.name = 'TokenError';
+		this.code = code;
+	}
+}
+
 function base64url(input: Buffer): string {
 	return input.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -75,12 +84,12 @@ async function postToken(
 		const payload = (await response.json().catch(() => ({}))) as { error?: string };
 		if (!response.ok) {
 			const suffix = payload.error ? ` (${payload.error})` : '';
-			throw new Error(`Google did not accept the sign-in.${suffix}`);
+			throw new TokenError(`Google did not accept the sign-in.${suffix}`, payload.error ?? null);
 		}
 		return payload;
 	} catch (err) {
 		if (timedOut) {
-			throw new Error('Google did not accept the sign-in. (timed out)');
+			throw new TokenError('Google did not accept the sign-in. (timed out)', null);
 		}
 		throw err;
 	} finally {
@@ -139,8 +148,7 @@ export async function accessTokenFor(
 			signal
 		)) as { access_token?: string };
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		if (message.includes('invalid_grant')) {
+		if (err instanceof TokenError && err.code === 'invalid_grant') {
 			throw new Error(
 				'UNAVAILABLE: The Google connection for this site has expired. Connect it again in Settings.'
 			);
@@ -148,5 +156,11 @@ export async function accessTokenFor(
 		throw err;
 	}
 
-	return payload.access_token as string;
+	if (!payload.access_token) {
+		throw new Error(
+			'UNAVAILABLE: Google did not return an access token. Connect the site again in Settings.'
+		);
+	}
+
+	return payload.access_token;
 }

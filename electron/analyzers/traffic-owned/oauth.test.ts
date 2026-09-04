@@ -197,6 +197,49 @@ describe('accessTokenFor', () => {
 		).rejects.toThrow(/Google did not accept the sign-in\..*server_error/);
 	});
 
+	it('does not treat other error codes as an expired connection', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify({ error: 'invalid_client' }), { status: 400 }))
+		);
+
+		await expect(
+			accessTokenFor('https://example.com/', credentials, 'cid', 'secret')
+		).rejects.toThrow(/Google did not accept the sign-in\..*invalid_client/);
+	});
+
+	it('throws UNAVAILABLE when the token response has no access token', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }))
+		);
+
+		await expect(
+			accessTokenFor('https://example.com/', credentials, 'cid', 'secret')
+		).rejects.toThrow(
+			'UNAVAILABLE: Google did not return an access token. Connect the site again in Settings.'
+		);
+	});
+
+	it('never leaks the refresh token in a thrown error message', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ error: 'invalid_grant', refresh_token: 'rt-123' }), {
+						status: 400
+					})
+			)
+		);
+
+		await expect(
+			accessTokenFor('https://example.com/', credentials, 'cid', 'secret')
+		).rejects.toThrow(/^(?:(?!rt-123).)*$/s);
+	});
+
 	it('honours an abort signal from the caller', async () => {
 		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
 		const controller = new AbortController();

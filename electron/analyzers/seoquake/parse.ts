@@ -1,10 +1,9 @@
 export type SeoQuakeData = {
-	googleIndex: number | null;
-	backlinks: number | null;
-	subdomainBacklinks: number | null;
-	bingIndex: number | null;
 	semrushRank: number | null;
-	raw: string[];
+	backlinks: number | null;
+	linkingDomains: number | null;
+	pinterest: number | null;
+	raw: Record<string, string>;
 };
 
 const SUFFIX_MULTIPLIERS: Record<string, number> = { k: 1e3, m: 1e6, b: 1e9 };
@@ -35,18 +34,28 @@ function toNumber(cell: string | undefined): number | null {
 }
 
 /**
- * The toolbar is positional: Google index, backlinks, subdomain backlinks,
- * Bing index, WhoIs, source, SEMrush rank. This ordering belongs to a
- * third-party extension and is the most likely thing to change, which is why
- * the raw cells are retained alongside the mapped values.
+ * SEO Quake 4 renders its toolbar as label/value span pairs inside a shadow
+ * root rather than as positional cells, so metrics are matched by label
+ * (case-insensitively) instead of by index. The raw label -> value map is
+ * retained alongside the mapped values since the extension's labels are the
+ * most likely thing to change next.
  */
-export function parseToolbar(cells: string[]): SeoQuakeData {
+export function parseToolbar(pairs: Array<{ label: string; value: string }>): SeoQuakeData {
+	const raw: Record<string, string> = {};
+	for (const { label, value } of pairs) {
+		raw[label] = value;
+	}
+
+	const find = (label: string): string | undefined => {
+		const match = pairs.find((pair) => pair.label.trim().toLowerCase() === label);
+		return match?.value;
+	};
+
 	return {
-		googleIndex: toNumber(cells[0]),
-		backlinks: toNumber(cells[1]),
-		subdomainBacklinks: toNumber(cells[2]),
-		bingIndex: toNumber(cells[3]),
-		semrushRank: toNumber(cells[6]),
-		raw: cells
+		semrushRank: toNumber(find('rank')),
+		backlinks: toNumber(find('l')),
+		linkingDomains: toNumber(find('ld')),
+		pinterest: toNumber(find('pin')),
+		raw
 	};
 }

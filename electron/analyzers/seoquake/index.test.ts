@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 type FakePage = {
 	setViewport: (opts: unknown) => Promise<void>;
 	goto: (url: string, opts?: unknown) => Promise<void>;
-	waitForSelector: (selector: string, opts?: unknown) => Promise<unknown>;
-	$$eval: (selector: string, fn: (nodes: unknown[]) => unknown) => Promise<string[]>;
+	waitForFunction: (fn: () => unknown, opts?: unknown) => Promise<unknown>;
+	evaluate: (fn: () => unknown) => Promise<Array<{ label: string; value: string }>>;
 	close: () => Promise<void>;
 };
 
@@ -13,6 +13,7 @@ type FakeBrowser = { newPage: () => Promise<FakePage>; close: () => Promise<void
 const state = vi.hoisted(() => ({
 	launches: 0,
 	launch: async (): Promise<unknown> => ({}),
+	launchOpts: undefined as unknown,
 	closes: 0,
 	existsSync: (p: string) => {
 		void p;
@@ -22,12 +23,17 @@ const state = vi.hoisted(() => ({
 		void p;
 		void opts;
 		return [{ name: '4.1.0_0', isDirectory: () => true }];
-	}
+	},
+	executablePath: () => 'C:/puppeteer/chrome-for-testing/chrome.exe'
 }));
 
 vi.mock('puppeteer', () => ({
 	default: {
-		launch: (opts: unknown) => state.launch(opts)
+		launch: (opts: unknown) => {
+			state.launchOpts = opts;
+			return state.launch(opts);
+		},
+		executablePath: () => state.executablePath()
 	}
 }));
 
@@ -37,18 +43,19 @@ vi.mock('fs', () => ({
 }));
 
 const { seoQuakeAnalyzer } = await import('./index');
+const { pickLatestVersion } = await import('./paths');
 
 const CHROME_PATH = 'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe';
 
-/** A browser whose page never resolves waitForSelector, so only an abort ends the work. */
+/** A browser whose page never resolves waitForFunction, so only an abort ends the work. */
 function hangingBrowser(): FakeBrowser {
 	state.launches++;
 	return {
 		newPage: async () => ({
 			setViewport: async () => {},
 			goto: async () => {},
-			waitForSelector: () => new Promise(() => {}),
-			$$eval: async () => [],
+			waitForFunction: () => new Promise(() => {}),
+			evaluate: async () => [],
 			close: async () => {}
 		}),
 		close: async () => {
@@ -60,8 +67,10 @@ function hangingBrowser(): FakeBrowser {
 beforeEach(() => {
 	state.closes = 0;
 	state.launches = 0;
+	state.launchOpts = undefined;
 	state.existsSync = () => true;
 	state.readdirSync = () => [{ name: '4.1.0_0', isDirectory: () => true }];
+	state.executablePath = () => 'C:/puppeteer/chrome-for-testing/chrome.exe';
 	state.launch = async () => hangingBrowser();
 });
 
@@ -88,6 +97,51 @@ describe('seoquake preflight', () => {
 
 	it('reports available when Chrome and the extension are both present', async () => {
 		expect(await seoQuakeAnalyzer.preflight(settings)).toEqual({ available: true });
+	});
+});
+
+describe('seoquake chrome resolution', () => {
+	it('prefers the configured chromePath when set', async () => {
+		state.launch = async () => hangingBrowser();
+		const controller = new AbortController();
+		const promise = seoQuakeAnalyzer.analyze('https://example.com/', settings, controller.signal);
+		await vi.waitFor(() => expect(state.launches).toBe(1));
+		controller.abort();
+		await expect(promise).rejects.toThrow(/Aborted/);
+
+		expect((state.launchOpts as { executablePath: string }).executablePath).toBe(CHROME_PATH);
+	});
+
+	it('falls back to puppeteer.executablePath() when no chromePath is configured', async () => {
+		state.launch = async () => hangingBrowser();
+		const noChromePathSettings = { chromePath: null, extensionPath: null };
+		const controller = new AbortController();
+		const promise = seoQuakeAnalyzer.analyze(
+			'https://example.com/',
+			noChromePathSettings,
+			controller.signal
+		);
+		await vi.waitFor(() => expect(state.launches).toBe(1));
+		controller.abort();
+		await expect(promise).rejects.toThrow(/Aborted/);
+
+		const opts = state.launchOpts as { executablePath: string; args: string[] };
+		expect(opts.executablePath).toBe('C:/puppeteer/chrome-for-testing/chrome.exe');
+		expect(opts.args.some((arg) => arg.startsWith('--disable-extensions-except='))).toBe(true);
+		expect(opts.args.some((arg) => arg.startsWith('--load-extension='))).toBe(true);
+	});
+
+	it('launches headless: false with both extension args regardless of chrome source', async () => {
+		state.launch = async () => hangingBrowser();
+		const controller = new AbortController();
+		const promise = seoQuakeAnalyzer.analyze('https://example.com/', settings, controller.signal);
+		await vi.waitFor(() => expect(state.launches).toBe(1));
+		controller.abort();
+		await expect(promise).rejects.toThrow(/Aborted/);
+
+		const opts = state.launchOpts as { headless: boolean; args: string[] };
+		expect(opts.headless).toBe(false);
+		expect(opts.args).toHaveLength(2);
 	});
 });
 
@@ -126,10 +180,10 @@ describe('seoquake analyze', () => {
 				newPage: async () => ({
 					setViewport: async () => {},
 					goto: async () => {},
-					waitForSelector: async () => {
-						throw new Error('waiting for selector failed: timeout 45000ms exceeded');
+					waitForFunction: async () => {
+						throw new Error('waiting for function failed: timeout 45000ms exceeded');
 					},
-					$$eval: async () => [],
+					evaluate: async () => [],
 					close: async () => {}
 				}),
 				close: async () => {
@@ -147,15 +201,20 @@ describe('seoquake analyze', () => {
 	});
 
 	it('resolves with parsed toolbar data and closes the browser once', async () => {
-		const cells = ['1,234', '56', '7', '890', 'n/a', 'source', '1.2K'];
+		const pairs = [
+			{ label: 'Rank', value: '38.5M' },
+			{ label: 'L', value: '213' },
+			{ label: 'LD', value: '435' },
+			{ label: 'PIN', value: '12' }
+		];
 		state.launch = async () => {
 			state.launches++;
 			return {
 				newPage: async () => ({
 					setViewport: async () => {},
 					goto: async () => {},
-					waitForSelector: async () => {},
-					$$eval: async () => cells,
+					waitForFunction: async () => {},
+					evaluate: async () => pairs,
 					close: async () => {}
 				}),
 				close: async () => {
@@ -172,13 +231,18 @@ describe('seoquake analyze', () => {
 		);
 
 		expect(result).toEqual({
-			googleIndex: 1234,
-			backlinks: 56,
-			subdomainBacklinks: 7,
-			bingIndex: 890,
-			semrushRank: 1200,
-			raw: cells
+			semrushRank: 38_500_000,
+			backlinks: 213,
+			linkingDomains: 435,
+			pinterest: 12,
+			raw: { Rank: '38.5M', L: '213', LD: '435', PIN: '12' }
 		});
 		expect(state.closes).toBe(1);
+	});
+});
+
+describe('pickLatestVersion', () => {
+	it('throws a readable error for an empty list of version directories', () => {
+		expect(() => pickLatestVersion([])).toThrow(/version directories/);
 	});
 });

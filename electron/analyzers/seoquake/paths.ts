@@ -54,7 +54,9 @@ export function extensionRoot(
 /** Chrome unpacks each extension into a per-version directory, so the version cannot be hardcoded. */
 export function pickLatestVersion(dirs: string[]): string {
 	if (dirs.length === 0) {
-		throw new Error('No extension version directories found.');
+		throw new Error(
+			'SEO Quake is installed but has no version directories under its extension folder.'
+		);
 	}
 
 	const rank = (name: string) => name.split(/[._]/).map((part) => Number(part) || 0);

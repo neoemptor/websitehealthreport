@@ -16,7 +16,12 @@ export async function fetchText(
 	}
 
 	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15_000);
+	const timeoutMs = opts.timeoutMs ?? 15_000;
+	let timedOut = false;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		controller.abort();
+	}, timeoutMs);
 	const onAbort = (): void => controller.abort();
 	opts.signal?.addEventListener('abort', onAbort);
 
@@ -33,6 +38,11 @@ export async function fetchText(
 			body: await response.text(),
 			finalUrl: response.url || url
 		};
+	} catch (err) {
+		if (timedOut) {
+			throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s.`);
+		}
+		throw err;
 	} finally {
 		clearTimeout(timer);
 		opts.signal?.removeEventListener('abort', onAbort);

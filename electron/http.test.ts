@@ -36,6 +36,23 @@ describe('fetchText', () => {
 		await expect(fetchText('https://example.com/', { timeoutMs: 20 })).rejects.toThrow();
 	});
 
+	it('reports the timeout in seconds, not the raw abort error', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(_url: string, init: RequestInit) =>
+					new Promise((_, reject) =>
+						init.signal?.addEventListener('abort', () =>
+							reject(new Error('This operation was aborted'))
+						)
+					)
+			)
+		);
+		await expect(fetchText('https://example.com/', { timeoutMs: 20 })).rejects.toThrow(
+			'Timed out after 0s.'
+		);
+	});
+
 	it('throws immediately if the caller signal is already aborted', async () => {
 		const spy = vi.fn(async () => new Response('', { status: 200 }));
 		vi.stubGlobal('fetch', spy);

@@ -8,7 +8,7 @@ export const waybackAnalyzer: Analyzer<Record<string, never>> = {
 	id: 'wayback',
 	label: 'Wayback History',
 	concurrency: 'parallel',
-	timeoutMs: 30_000,
+	timeoutMs: 60_000,
 	defaultSettings: {},
 
 	// Nothing to install and nothing to configure.
@@ -23,7 +23,7 @@ export const waybackAnalyzer: Analyzer<Record<string, never>> = {
 		url.searchParams.set('collapse', 'timestamp:8');
 		url.searchParams.set('filter', 'statuscode:200');
 
-		const { status, body } = await fetchText(url.toString(), { signal, timeoutMs: 25_000 });
+		const { status, body } = await fetchText(url.toString(), { signal, timeoutMs: 55_000 });
 		if (status !== 200) {
 			throw new Error(`The Internet Archive answered with status ${status}.`);
 		}

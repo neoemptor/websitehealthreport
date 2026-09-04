@@ -179,7 +179,7 @@ describe('severityOf — wayback', () => {
 			]
 		});
 		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
-		expect(s.finding).toBe(`Archived since 2019, with 5 snapshots in ${thisYear}.`);
+		expect(s.finding).toBe(`Archived since 2019, captured on 5 days in ${thisYear}.`);
 	});
 
 	it('is Good when the most recent snapshot is last year', () => {
@@ -203,6 +203,18 @@ describe('severityOf — wayback', () => {
 		});
 		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
 		expect(s.finding).toBe('Last archived in 2018; the archive has nothing more recent.');
+	});
+
+	it('falls back to Measured when a row is missing a year', () => {
+		const s = severityOf('wayback', {
+			status: 'ok',
+			data: {
+				firstSeen: '2015-01-01',
+				lastSeen: '2018-06-01',
+				snapshotsByYear: [{ count: 4 }]
+			}
+		});
+		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
 	});
 });
 
@@ -408,5 +420,15 @@ describe('severityOf — aeo', () => {
 	it('never uses a score word', () => {
 		const s = ok({ jsDependencyRatio: 0.1 });
 		expect(s.finding).not.toMatch(/score/i);
+	});
+
+	it('never rounds a ratio under 1 up to 100%', () => {
+		const s = ok({ jsDependencyRatio: 0.996 });
+		expect(s.finding).toBe('99% of the page text is available without JavaScript.');
+	});
+
+	it('falls back to Measured when structuredData is empty', () => {
+		const s = severityOf('aeo', { status: 'ok', data: { ...base, structuredData: {} } });
+		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
 	});
 });

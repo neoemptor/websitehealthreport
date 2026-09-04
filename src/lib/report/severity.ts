@@ -239,7 +239,8 @@ function isWayback(d: unknown): d is WaybackData {
 		!!w &&
 		(w.firstSeen === null || typeof w.firstSeen === 'string') &&
 		(w.lastSeen === null || typeof w.lastSeen === 'string') &&
-		Array.isArray(w.snapshotsByYear)
+		Array.isArray(w.snapshotsByYear) &&
+		w.snapshotsByYear.every((row) => typeof row?.year === 'string' && isNumber(row?.count))
 	);
 }
 
@@ -253,6 +254,9 @@ function waybackSeverity(d: WaybackData): Severity {
 	}
 
 	const firstYear = d.firstSeen.slice(0, 4);
+	// The latest year is read from snapshotsByYear rather than lastSeen — the
+	// analyzer derives both from the same underlying CDX rows, so they always
+	// agree, but snapshotsByYear is what this function's counts come from.
 	const sorted = [...d.snapshotsByYear].sort((a, b) => a.year.localeCompare(b.year));
 	const latest = sorted[sorted.length - 1];
 	const currentYear = new Date().getFullYear();
@@ -262,7 +266,7 @@ function waybackSeverity(d: WaybackData): Severity {
 		return {
 			word: 'Good',
 			tone: 'ok',
-			finding: `Archived since ${firstYear}, with ${latest.count} snapshots in ${latest.year}.`
+			finding: `Archived since ${firstYear}, captured on ${latest.count} days in ${latest.year}.`
 		};
 	}
 
@@ -370,14 +374,22 @@ function isAeo(d: unknown): d is AeoData {
 		typeof a.llmsTxt === 'boolean' &&
 		typeof a.sitemap === 'boolean' &&
 		Array.isArray(a.crawlers) &&
-		!!a.structuredData &&
-		!!a.headings &&
+		isNumber(a.structuredData?.valid) &&
+		isNumber(a.structuredData?.blocks) &&
+		isNumber(a.headings?.h1Count) &&
+		typeof a.headings?.hierarchyOk === 'boolean' &&
 		isNumber(a.jsDependencyRatio)
 	);
 }
 
+/** A ratio under 1 must never round up to display as 100%. */
+function jsRatioPercent(ratio: number): number {
+	if (ratio >= 1) return 100;
+	return Math.min(99, Math.round(ratio * 100));
+}
+
 function aeoSeverity(d: AeoData): Severity {
-	const percent = Math.round(d.jsDependencyRatio * 100);
+	const percent = jsRatioPercent(d.jsDependencyRatio);
 	const lead = `${percent}% of the page text is available without JavaScript`;
 
 	const issues: string[] = [];

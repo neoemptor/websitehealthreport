@@ -5,6 +5,7 @@
 	import type { Run, AnalyzerResult, AnalyzerId } from '$lib/shared/types';
 	import Lighthouse from '$lib/report/Lighthouse.svelte';
 	import Keywords from '$lib/report/Keywords.svelte';
+	import OldSeo from '$lib/report/OldSeo.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
 	import { severityOf } from '$lib/report/severity';
@@ -19,7 +20,8 @@
 	// result renders empty rather than throwing.
 	const components: Partial<Record<AnalyzerId, ComponentType>> = {
 		lighthouse: Lighthouse,
-		keywords: Keywords
+		keywords: Keywords,
+		oldseo: OldSeo
 	};
 
 	let run: Run | null = null;
@@ -69,7 +71,8 @@
 		aeo: 'AI Agent Optimisation',
 		content: 'Spelling and grammar',
 		'traffic-owned': 'Traffic (measured)',
-		'traffic-estimated': 'Traffic (estimated)'
+		'traffic-estimated': 'Traffic (estimated)',
+		oldseo: 'Old SEO practices'
 	};
 
 	function analyzerName(id: string): string {

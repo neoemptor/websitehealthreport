@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { BUSINESS } from '../src/lib/report/business';
 
 export type ExportOptions = {
 	runId: string;
@@ -29,13 +30,18 @@ const POLL_INTERVAL_MS = 100;
  * the client cares when the site was measured, in the format they read.
  */
 function footerTemplate(dateLabel: string): string {
+	const contact = [BUSINESS.name, BUSINESS.phoneDisplay, BUSINESS.email, BUSINESS.websiteDisplay]
+		.map(escapeHtml)
+		.join(' &middot; ');
+
 	return `
 	<div style="width:100%;margin:0 12mm;padding-top:4mm;border-top:0.5pt solid #D8D5CE;
-	            font-family:Georgia,'Times New Roman',serif;font-size:7.5pt;color:#6B6659;
-	            display:flex;justify-content:space-between;">
-		<span>D S Bailey Freelancer</span>
-		<span>${escapeHtml(dateLabel)}</span>
-		<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+	            font-family:Georgia,'Times New Roman',serif;font-size:7pt;color:#6B6659;
+	            display:flex;justify-content:space-between;gap:8mm;">
+		<span>${contact}</span>
+		<span style="white-space:nowrap;">${escapeHtml(
+			dateLabel
+		)} &middot; Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
 	</div>
 `;
 }

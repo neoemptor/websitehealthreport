@@ -17,3 +17,7 @@ docs/
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
+
+# Tool-generated state: rewritten by their own tooling, not authored here
+.claude
+.impeccable

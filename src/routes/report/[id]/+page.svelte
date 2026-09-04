@@ -6,6 +6,7 @@
 	import Lighthouse from '$lib/report/Lighthouse.svelte';
 	import Keywords from '$lib/report/Keywords.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
+	import Letterhead from '$lib/report/Letterhead.svelte';
 
 	// Analyzers without a component fall back to their raw values, so adding one
 	// can never break the report. The remaining seven arrive with their plans.
@@ -119,23 +120,45 @@
 		<article
 			class="max-w-[820px] bg-paper px-12 py-11 text-ink shadow-[0_1px_0_rgba(0,0,0,0.4)] print:max-w-none print:px-0 print:py-0 print:shadow-none"
 		>
-			<header class="border-b-2 border-ink pb-5">
-				<p class="font-mono text-[10px] uppercase tracking-[0.18em] text-accent">
-					Website Health Report
-				</p>
-				<h1 class="mt-2 font-serif text-[30px] leading-tight">{host(run.client)}</h1>
-				<p class="mt-1.5 font-mono text-[11px] text-[#6B6659]">
-					{new Date(run.createdAt).toLocaleDateString('en-AU', {
-						day: 'numeric',
-						month: 'long',
-						year: 'numeric'
-					})}
-					{#if run.competitors.length > 0}
-						· compared against {run.competitors.length}
-						{run.competitors.length === 1 ? 'competitor' : 'competitors'}
-					{/if}
-				</p>
+			<!-- Masthead: the subject on the left, the letterhead on the right. The
+			     document type sits in the line beneath the heading rather than as a
+			     label above it — the client's own domain is the heading, because it
+			     is the thing they recognise first. -->
+			<header class="flex items-start justify-between gap-8 border-b-2 border-ink pb-5">
+				<div class="min-w-0">
+					<h1 class="font-serif text-[30px] leading-tight">{host(run.client)}</h1>
+					<!-- text-pretty stops the competitor count orphaning its last word
+					     onto a line of its own beside the letterhead. -->
+					<p class="mt-1.5 text-pretty text-[11.5px] text-[#6B6659]">
+						Website health report ·
+						{new Date(run.createdAt).toLocaleDateString('en-AU', {
+							day: 'numeric',
+							month: 'long',
+							year: 'numeric'
+						})}
+						{#if run.competitors.length > 0}
+							· compared against {run.competitors.length}
+							{run.competitors.length === 1 ? 'competitor' : 'competitors'}
+						{/if}
+					</p>
+				</div>
+
+				<Letterhead />
 			</header>
+
+			<!-- A prospect may read this with nobody there to explain it, so the
+			     document says up front how to read a check that produced no number.
+			     Measure is held near 62ch; the article is wider than comfortable
+			     for running prose. -->
+			<p class="mt-6 max-w-[62ch] text-[13px] leading-relaxed text-[#3A3730]">
+				{#if run.competitors.length > 0}
+					Every site below was measured with the same checks, so the results can be read side by
+					side.
+				{:else}
+					The checks below were run against this site.
+				{/if}
+				Where a check could not run, it says why instead of leaving a gap.
+			</p>
 
 			<!-- Domains flow continuously rather than one per page. A section is
 			     therefore free to split across a page boundary — deliberately: the

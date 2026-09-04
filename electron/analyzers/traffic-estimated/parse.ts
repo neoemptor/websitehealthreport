@@ -8,7 +8,7 @@ export type EstimatedTrafficData = {
 export function parseSemrushCsv(body: string): Record<string, string>[] {
 	const lines = body
 		.trim()
-		.split('\n')
+		.split(/\r?\n/)
 		.filter((line) => line.length > 0);
 	if (lines.length < 2) return [];
 
@@ -35,16 +35,18 @@ export function toEstimatedTraffic(rows: Record<string, string>[]): EstimatedTra
 	};
 }
 
-/** Quota exhaustion is a billing state, not a crash, so it maps to unavailable. */
-export function isQuotaError(body: string): boolean {
-	return /NOT ENOUGH API UNITS|ERROR 12[01]/i.test(body);
-}
-
 /**
- * Semrush error codes 120/130/131/132/133/134/135 all indicate a key, unit-balance,
+ * Semrush error codes 120/121/130/131/132/133/134/135 all indicate a key, unit-balance,
  * or access problem (a billing/auth state, not a crash) so the analyzer should report
  * "unavailable" rather than "failed" for these. Everything else is a genuine failure.
  */
 export function classifyError(code: number): 'unavailable' | 'failed' {
-	return [120, 130, 131, 132, 133, 134, 135].includes(code) ? 'unavailable' : 'failed';
+	return [120, 121, 130, 131, 132, 133, 134, 135].includes(code) ? 'unavailable' : 'failed';
+}
+
+/** Quota exhaustion is a billing state, not a crash, so it maps to unavailable. */
+export function isQuotaError(body: string): boolean {
+	const match = body.match(/ERROR\s+(\d+)/i);
+	if (!match) return false;
+	return classifyError(Number(match[1])) === 'unavailable';
 }

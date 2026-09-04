@@ -19,6 +19,14 @@ describe('parseSemrushCsv', () => {
 	it('returns an empty array for an empty body', () => {
 		expect(parseSemrushCsv('')).toEqual([]);
 	});
+
+	it('parses a CRLF response identically, including the last column', () => {
+		const crlfBody =
+			'Database;Date;Organic Keywords;Organic Traffic;Organic Cost;Adwords Keywords\r\nau;20260901;412;3100;5200;7\r\n';
+		const rows = parseSemrushCsv(crlfBody);
+		expect(rows).toHaveLength(1);
+		expect(rows[0]['Adwords Keywords']).toBe('7');
+	});
 });
 
 describe('toEstimatedTraffic', () => {
@@ -46,20 +54,28 @@ describe('isQuotaError', () => {
 		expect(isQuotaError('ERROR 120 :: NOT ENOUGH API UNITS')).toBe(true);
 	});
 
+	it.each([120, 121, 132])('treats error %d as a quota/unavailable error', (code) => {
+		expect(isQuotaError(`ERROR ${code} :: SOME MESSAGE`)).toBe(true);
+	});
+
+	it('does not treat error 500 as a quota error', () => {
+		expect(isQuotaError('ERROR 500 :: INTERNAL ERROR')).toBe(false);
+	});
+
 	it('does not treat an ordinary response as a quota error', () => {
 		expect(isQuotaError(body)).toBe(false);
 	});
 });
 
 describe('classifyError', () => {
-	it.each([120, 130, 131, 132, 133, 134, 135])(
+	it.each([120, 121, 130, 131, 132, 133, 134, 135])(
 		'classifies key/unit/access error %d as unavailable',
 		(code) => {
 			expect(classifyError(code)).toBe('unavailable');
 		}
 	);
 
-	it.each([50, 100, 121, 999])('classifies unrelated error %d as failed', (code) => {
+	it.each([50, 100, 500, 999])('classifies unrelated error %d as failed', (code) => {
 		expect(classifyError(code)).toBe('failed');
 	});
 });

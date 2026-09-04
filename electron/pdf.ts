@@ -9,6 +9,8 @@ export type ExportOptions = {
 	outPath: string;
 	/** Overridable for slow machines and tests. */
 	readyTimeoutMs?: number;
+	/** Shown on every page. The run date, formatted for the reader. */
+	footerDate?: string;
 };
 
 const READY_TIMEOUT_MS = 60_000;
@@ -19,18 +21,31 @@ const POLL_INTERVAL_MS = 100;
  *
  * Chromium renders this in an isolated context with its own tiny default font
  * size and no access to the page's stylesheet, so every rule has to be inline
- * and the size stated explicitly. `date` and `pageNumber`/`totalPages` are
- * substituted by Chromium.
+ * and the size stated explicitly. `pageNumber` and `totalPages` are substituted
+ * by Chromium.
+ *
+ * The date is interpolated rather than using Chromium's own `date` class: that
+ * renders the moment of printing in the host's US-style short format, whereas
+ * the client cares when the site was measured, in the format they read.
  */
-const FOOTER_TEMPLATE = `
+function footerTemplate(dateLabel: string): string {
+	return `
 	<div style="width:100%;margin:0 12mm;padding-top:4mm;border-top:0.5pt solid #D8D5CE;
 	            font-family:Georgia,'Times New Roman',serif;font-size:7.5pt;color:#6B6659;
 	            display:flex;justify-content:space-between;">
 		<span>D S Bailey Freelancer</span>
-		<span class="date"></span>
+		<span>${escapeHtml(dateLabel)}</span>
 		<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
 	</div>
 `;
+}
+
+function escapeHtml(value: string): string {
+	return value.replace(
+		/[&<>"']/g,
+		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string)
+	);
+}
 
 type ReportState = { state: string | null; error: string | null } | null;
 
@@ -113,7 +128,7 @@ export async function exportRunPdf(opts: ExportOptions): Promise<string> {
 			// the one place where screen and PDF deliberately differ.
 			displayHeaderFooter: true,
 			headerTemplate: '<div></div>',
-			footerTemplate: FOOTER_TEMPLATE,
+			footerTemplate: footerTemplate(opts.footerDate ?? ''),
 			// top/bottom/left/right are only honoured when marginType is
 			// 'custom' — without it they're silently ignored. Electron's types
 			// say these are pixels, but at runtime, with a named pageSize preset

@@ -48,12 +48,22 @@ export function registerIpc(deps: {
 			const runId = assertRunId(rawRunId);
 			const { exportRunPdf } = await import('./pdf');
 
+			// The footer carries the date the site was measured, not the date the
+			// PDF happened to be printed, and in the reader's format.
+			const run = await handlers.loadRun(runId);
+			const footerDate = new Date(run.createdAt).toLocaleDateString('en-AU', {
+				day: 'numeric',
+				month: 'long',
+				year: 'numeric'
+			});
+
 			// Renders the same /report/:id route the operator reviews on screen,
 			// over the same origin the main window uses (see main.ts / server.ts).
 			return exportRunPdf({
 				runId,
 				rendererBase: deps.rendererBase,
-				outPath: path.join(deps.userDataDir, 'reports', `${runId}.pdf`)
+				outPath: path.join(deps.userDataDir, 'reports', `${runId}.pdf`),
+				footerDate
 			});
 		})
 	);

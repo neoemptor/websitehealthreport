@@ -810,6 +810,25 @@ describe('severityOf — traffic-owned', () => {
 		);
 	});
 
+	it('says the totals are not available when Search Console refused them', () => {
+		const noTotals = { status: 'ok' as const, data: { totals: null, topQueries: [] } };
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: noTotals, ga4: ga4(4321), range }
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+		expect(s.finding).toBe('Search Console connected; totals not available; 4,321 GA4 sessions.');
+	});
+
+	it('says the totals are not available with GA4 also not connected', () => {
+		const noTotals = { status: 'ok' as const, data: { totals: null, topQueries: [] } };
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: noTotals, ga4: unavailable('No GA4 property id is set.'), range }
+		});
+		expect(s.finding).toBe('Search Console connected; totals not available. GA4 is not connected.');
+	});
+
 	it('is Measured when GA4 is ok but Search Console is not connected', () => {
 		const s = severityOf('traffic-owned', {
 			status: 'ok',

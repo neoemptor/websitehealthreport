@@ -4,6 +4,16 @@ import * as os from 'os';
 import * as path from 'path';
 import { CredentialStore } from './credentials';
 
+// fs/promises is an ESM namespace, so its members cannot be redefined by
+// vi.spyOn; the module is wrapped instead so chmod can be observed and made
+// to fail. Every other member is the real implementation.
+const chmodSpy = vi.hoisted(() => vi.fn());
+vi.mock('fs/promises', async () => {
+	const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
+	chmodSpy.mockImplementation(actual.chmod);
+	return { ...actual, default: actual, chmod: chmodSpy };
+});
+
 // Reversible stand-in for safeStorage, which needs a running Electron app.
 const fakeCrypto = {
 	isEncryptionAvailable: () => true,
@@ -15,6 +25,7 @@ let dir: string;
 let store: CredentialStore;
 
 beforeEach(async () => {
+	chmodSpy.mockClear();
 	dir = await fs.mkdtemp(path.join(os.tmpdir(), 'whr-cred-'));
 	store = new CredentialStore(dir, fakeCrypto);
 });
@@ -79,6 +90,28 @@ describe('CredentialStore', () => {
 			expect(dirStat.mode & 0o777).toBe(0o700);
 		}
 	);
+
+	it('tightens the store directory to owner-only on write, on every platform', async () => {
+		// The POSIX test above can only observe the result where modes exist;
+		// this one checks the attempt is made at all, since Electron's userData
+		// directory usually pre-exists and mkdir's mode would then never apply.
+		await store.set('semrush', 'key-123');
+
+		expect(chmodSpy.mock.calls).toContainEqual([dir, 0o700]);
+	});
+
+	it('still saves the credential when the directory chmod fails', async () => {
+		const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
+		chmodSpy.mockImplementation(async (target: unknown, mode: unknown) => {
+			if (target === dir) throw new Error('EPERM');
+			await actual.chmod(target as string, mode as number);
+		});
+
+		await store.set('semrush', 'key-123');
+
+		expect(await store.get('semrush')).toBe('key-123');
+		chmodSpy.mockImplementation(actual.chmod);
+	});
 
 	it('serialises overlapping set() calls so no write is lost', async () => {
 		await Promise.all([store.set('a', '1'), store.set('b', '2')]);

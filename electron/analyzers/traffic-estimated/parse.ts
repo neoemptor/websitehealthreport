@@ -56,3 +56,13 @@ export function isQuotaError(body: string): boolean {
 	if (code === null) return false;
 	return classifyError(code) === 'unavailable';
 }
+
+/**
+ * Semrush reports an unknown or unindexed domain as a "NOTHING FOUND" body
+ * (sometimes wrapped in an ERROR line) rather than an HTTP error, so this is
+ * an ok result with null figures. One detector, so the phrasing is matched
+ * the same way everywhere it is checked.
+ */
+export function isNothingFound(body: string): boolean {
+	return /NOTHING FOUND/i.test(body);
+}

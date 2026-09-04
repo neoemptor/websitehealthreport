@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as crypto from 'crypto';
 import {
 	SCOPES,
 	accessTokenFor,
 	buildAuthUrl,
+	clearAccessTokenCache,
 	createPkce,
 	exchangeCode,
 	generateState,
@@ -178,8 +179,97 @@ describe('exchangeCode', () => {
 });
 
 describe('accessTokenFor', () => {
+	beforeEach(() => {
+		// The access-token cache is module state; it must not leak between tests.
+		clearAccessTokenCache();
+	});
+
 	afterEach(() => {
 		vi.unstubAllGlobals();
+	});
+
+	it('reuses a cached access token instead of posting again', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(JSON.stringify({ access_token: 'at-abc', expires_in: 3600 }), { status: 200 })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-abc'
+		);
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-abc'
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not serve one site's cached token to another", async () => {
+		const credentials = fakeCredentials({
+			'google.refresh.example.com': 'rt-123',
+			'google.refresh.other.com': 'rt-456'
+		});
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-one', expires_in: 3600 }), { status: 200 })
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-two', expires_in: 3600 }), { status: 200 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-one'
+		);
+		expect(await accessTokenFor('https://other.com/', credentials, 'cid', 'secret')).toBe('at-two');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('mints a fresh token again once the cache has been invalidated by a failure', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-abc', expires_in: 3600 }), { status: 200 })
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: 'server_error' }), { status: 500 })
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-def', expires_in: 3600 }), { status: 200 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-abc'
+		);
+
+		// A cached entry that has all but expired is refreshed, and the failure
+		// that follows drops it, so the next call posts again rather than
+		// returning the dead token.
+		clearAccessTokenCache();
+		await expect(
+			accessTokenFor('https://example.com/', credentials, 'cid', 'secret')
+		).rejects.toThrow(/server_error/);
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-def'
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it('does not cache a token Google gave no expiry for', async () => {
+		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
+		const fetchMock = vi.fn(
+			async () => new Response(JSON.stringify({ access_token: 'at-abc' }), { status: 200 })
+		);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await accessTokenFor('https://example.com/', credentials, 'cid', 'secret');
+		await accessTokenFor('https://example.com/', credentials, 'cid', 'secret');
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('throws UNAVAILABLE when no refresh token is stored', async () => {

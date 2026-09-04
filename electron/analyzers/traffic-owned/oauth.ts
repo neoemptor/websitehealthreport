@@ -130,6 +130,23 @@ export async function exchangeCode(opts: {
 	return { refreshToken: payload.refresh_token };
 }
 
+/**
+ * Access tokens Google has already issued, keyed by the refresh-token
+ * credential key (i.e. per site). Google's tokens last an hour, so a run that
+ * reads Search Console and GA4 for the same site would otherwise pay for a
+ * token round-trip each time. Entries are dropped on any failure so a broken
+ * or revoked connection is never served from here.
+ */
+const accessTokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+/** Refresh a little before expiry so a token cannot lapse mid-request. */
+const EXPIRY_MARGIN_MS = 60_000;
+
+/** Test seam: the cache is module state and must not leak between tests. */
+export function clearAccessTokenCache(): void {
+	accessTokenCache.clear();
+}
+
 export async function accessTokenFor(
 	domain: string,
 	credentials: CredentialStore,
@@ -137,12 +154,18 @@ export async function accessTokenFor(
 	clientSecret: string,
 	signal?: AbortSignal
 ): Promise<string> {
-	const refreshToken = await credentials.get(refreshTokenKey(domain));
+	const cacheKey = refreshTokenKey(domain);
+	const refreshToken = await credentials.get(cacheKey);
 	if (!refreshToken) {
 		throw new Error("UNAVAILABLE: This site's Google account has not been connected in Settings.");
 	}
 
-	let payload: { access_token?: string };
+	const cached = accessTokenCache.get(cacheKey);
+	if (cached && Date.now() < cached.expiresAt - EXPIRY_MARGIN_MS) {
+		return cached.token;
+	}
+
+	let payload: { access_token?: string; expires_in?: number };
 	try {
 		payload = (await postToken(
 			new URLSearchParams({
@@ -152,8 +175,11 @@ export async function accessTokenFor(
 				grant_type: 'refresh_token'
 			}),
 			signal
-		)) as { access_token?: string };
+		)) as { access_token?: string; expires_in?: number };
 	} catch (err) {
+		// Any failure invalidates whatever was cached: the connection may have
+		// been revoked, and a stale token must not outlive it.
+		accessTokenCache.delete(cacheKey);
 		if (err instanceof TokenError && err.code === 'invalid_grant') {
 			throw new Error(
 				'UNAVAILABLE: The Google connection for this site has expired. Connect it again in Settings.'
@@ -163,9 +189,21 @@ export async function accessTokenFor(
 	}
 
 	if (!payload.access_token) {
+		accessTokenCache.delete(cacheKey);
 		throw new Error(
 			'UNAVAILABLE: Google did not return an access token. Connect the site again in Settings.'
 		);
+	}
+
+	// A missing expires_in means the token cannot be trusted to last, so it is
+	// used once and not cached.
+	if (typeof payload.expires_in === 'number' && Number.isFinite(payload.expires_in)) {
+		accessTokenCache.set(cacheKey, {
+			token: payload.access_token,
+			expiresAt: Date.now() + payload.expires_in * 1000
+		});
+	} else {
+		accessTokenCache.delete(cacheKey);
 	}
 
 	return payload.access_token;

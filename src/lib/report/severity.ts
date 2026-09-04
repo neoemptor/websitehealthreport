@@ -585,7 +585,8 @@ type SourceResult<T> = { status: 'ok'; data: T } | { status: 'unavailable'; reas
 
 type GscTotals = { clicks: number; impressions: number; ctr: number; position: number };
 type GscData = {
-	totals: GscTotals;
+	/** Null when Search Console answered the queries but refused the totals. */
+	totals: GscTotals | null;
 	topQueries: Array<{ query: string; clicks: number; impressions: number }>;
 };
 type Ga4Data = { sessions: number; users: number; engagementRate: number };
@@ -656,11 +657,12 @@ function isGscData(d: unknown): d is GscData {
 	const g = d as GscData | null;
 	return (
 		!!g &&
-		!!g.totals &&
-		isNumber(g.totals.clicks) &&
-		isNumber(g.totals.impressions) &&
-		isNumber(g.totals.ctr) &&
-		isNumber(g.totals.position) &&
+		(g.totals === null ||
+			(!!g.totals &&
+				isNumber(g.totals.clicks) &&
+				isNumber(g.totals.impressions) &&
+				isNumber(g.totals.ctr) &&
+				isNumber(g.totals.position))) &&
 		Array.isArray(g.topQueries) &&
 		g.topQueries.every(
 			(q) => typeof q?.query === 'string' && isNumber(q?.clicks) && isNumber(q?.impressions)
@@ -690,14 +692,23 @@ function rangeDays(range: { start: string; end: string }): number {
 	return Math.max(0, Math.round(ms / 86_400_000));
 }
 
+/**
+ * Search Console can answer the queries but refuse the site-wide totals, so
+ * the clicks/impressions sentence has a fallback that still says the account
+ * is connected rather than implying zero traffic.
+ */
+function clicksSentence(totals: GscTotals | null, days: number): string {
+	if (!totals) return 'Search Console connected; totals not available';
+	return `${totals.clicks.toLocaleString('en-AU')} clicks from ${totals.impressions.toLocaleString(
+		'en-AU'
+	)} impressions in the last ${plural(days, 'day')}`;
+}
+
 function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
 	const days = rangeDays(d.range);
 
 	if (d.searchConsole.status === 'ok' && d.ga4.status === 'ok') {
-		const { clicks, impressions } = d.searchConsole.data.totals;
-		const base = `${clicks.toLocaleString('en-AU')} clicks from ${impressions.toLocaleString(
-			'en-AU'
-		)} impressions in the last ${plural(days, 'day')}`;
+		const base = clicksSentence(d.searchConsole.data.totals, days);
 		return {
 			word: 'Measured',
 			// Tone 'na', not 'ok': only the client can ever have this reading, so
@@ -709,16 +720,13 @@ function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
 	}
 
 	if (d.searchConsole.status === 'ok' && d.ga4.status === 'unavailable') {
-		const { clicks, impressions } = d.searchConsole.data.totals;
 		return {
 			word: 'Measured',
 			// Tone 'na', not 'ok': only the client can ever have this reading, so
 			// letting it score would lift the client's grade above a competitor's
 			// for a check the competitor was never eligible for.
 			tone: 'na',
-			finding: `${clicks.toLocaleString('en-AU')} clicks from ${impressions.toLocaleString(
-				'en-AU'
-			)} impressions in the last ${plural(days, 'day')}. GA4 is not connected.`
+			finding: `${clicksSentence(d.searchConsole.data.totals, days)}. GA4 is not connected.`
 		};
 	}
 

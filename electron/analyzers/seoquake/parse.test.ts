@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseToolbar } from './parse';
+import { pairLabels, parseToolbar } from './parse';
 
 describe('parseToolbar', () => {
 	it('maps toolbar pairs to named metrics by label, case-insensitively', () => {
@@ -72,5 +72,52 @@ describe('parseToolbar', () => {
 		expect(parseToolbar([{ label: 'rank', value: '—' }]).semrushRank).toBeNull();
 		expect(parseToolbar([{ label: 'rank', value: '1.2X' }]).semrushRank).toBeNull();
 		expect(parseToolbar([{ label: 'rank', value: '5pts' }]).semrushRank).toBeNull();
+	});
+
+	it('keeps every group of an abbreviated value with a thousands separator', () => {
+		expect(parseToolbar([{ label: 'rank', value: '1,234.5K' }]).semrushRank).toBe(1234500);
+	});
+
+	it('returns null for a plain decimal, which is not a toolbar count', () => {
+		expect(parseToolbar([{ label: 'rank', value: '1.5' }]).semrushRank).toBeNull();
+		expect(parseToolbar([{ label: 'rank', value: '12.34' }]).semrushRank).toBeNull();
+	});
+});
+
+describe('pairLabels', () => {
+	it('pairs each value with the label before it', () => {
+		expect(
+			pairLabels([
+				{ kind: 'label', text: 'Rank', parent: 0 },
+				{ kind: 'value', text: '38.5M', parent: 0 },
+				{ kind: 'label', text: 'L', parent: 1 },
+				{ kind: 'value', text: '213', parent: 1 }
+			])
+		).toEqual([
+			{ label: 'Rank', value: '38.5M' },
+			{ label: 'L', value: '213' }
+		]);
+	});
+
+	it('shares one label between two values that follow it in the same parent', () => {
+		expect(
+			pairLabels([
+				{ kind: 'label', text: 'LD', parent: 0 },
+				{ kind: 'value', text: '435', parent: 0 },
+				{ kind: 'value', text: '436', parent: 0 }
+			])
+		).toEqual([
+			{ label: 'LD', value: '435' },
+			{ label: 'LD', value: '436' }
+		]);
+	});
+
+	it('gives a value with no preceding label in its parent an empty label', () => {
+		expect(
+			pairLabels([
+				{ kind: 'label', text: 'Rank', parent: 0 },
+				{ kind: 'value', text: '12', parent: 1 }
+			])
+		).toEqual([{ label: '', value: '12' }]);
 	});
 });

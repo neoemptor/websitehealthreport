@@ -5,7 +5,7 @@ import puppeteer from 'puppeteer';
 import type { Analyzer } from '../types';
 import { once, rejectOnAbort } from '../abort';
 import { chromeCandidates, extensionRoot, pickLatestVersion } from './paths';
-import { parseToolbar, type SeoQuakeData } from './parse';
+import { pairLabels, parseToolbar, type SeoQuakeData } from './parse';
 
 export type SeoQuakeSettings = { chromePath: string | null; extensionPath: string | null };
 
@@ -106,7 +106,10 @@ export const seoQuakeAnalyzer: Analyzer<SeoQuakeSettings> = {
 };
 
 /**
- * Reads the label/value pairs out of SEO Quake's shadow-DOM toolbar.
+ * Reads the toolbar's leaf spans out of SEO Quake's shadow DOM as a flat node
+ * list: each span's kind (a bold span is a value, anything else a label), its
+ * text, and the index of its parent element. Pairing those nodes into
+ * label/value pairs happens outside the page, in `pairLabels`.
  *
  * Passed as-is to both `page.waitForFunction` and `page.evaluate` below, so
  * it must stay fully self-contained: Puppeteer serializes a function by its
@@ -114,33 +117,37 @@ export const seoQuakeAnalyzer: Analyzer<SeoQuakeSettings> = {
  * defined in this Node.js module (imports, other functions, constants). This
  * is the only copy — a selector fix here lands in both call sites at once.
  */
-function extractPairs(): Array<{ label: string; value: string }> {
+function extractNodes(): Array<{ kind: 'label' | 'value'; text: string; parent: number }> {
 	const host = document.querySelector('seoquake-seobar');
 	const root = (host as Element | null)?.shadowRoot;
 	if (!root) return [];
 
-	const results: Array<{ label: string; value: string }> = [];
-	const values = root.querySelectorAll('span.font-semibold');
-	values.forEach((valueEl) => {
-		const value = (valueEl.textContent ?? '').trim();
-		const parent = valueEl.parentElement;
-		if (!parent) return;
+	const parents: Element[] = [];
+	const nodes: Array<{ kind: 'label' | 'value'; text: string; parent: number }> = [];
 
-		let label = '';
-		const previous = valueEl.previousElementSibling;
-		if (previous && previous.tagName === 'SPAN' && !previous.classList.contains('font-semibold')) {
-			label = (previous.textContent ?? '').trim();
-		} else {
-			const siblingSpans = Array.from(parent.querySelectorAll(':scope > span'));
-			const labelSpan = siblingSpans.find(
-				(span) => span !== valueEl && !span.classList.contains('font-semibold')
-			);
-			label = (labelSpan?.textContent ?? '').trim();
+	root.querySelectorAll('span').forEach((span) => {
+		// Only leaf spans carry text of their own; a wrapper span would repeat
+		// its children's text.
+		if (span.querySelector('span')) return;
+		const text = (span.textContent ?? '').trim();
+		if (text === '') return;
+		const parentEl = span.parentElement;
+		if (!parentEl) return;
+
+		let parent = parents.indexOf(parentEl);
+		if (parent === -1) {
+			parent = parents.length;
+			parents.push(parentEl);
 		}
 
-		if (label) results.push({ label, value });
+		nodes.push({
+			kind: span.classList.contains('font-semibold') ? 'value' : 'label',
+			text,
+			parent
+		});
 	});
-	return results;
+
+	return nodes;
 }
 
 async function scrape(
@@ -160,16 +167,19 @@ async function scrape(
 		// extraction used below actually finds a labelled pair instead.
 		try {
 			// waitForFunction takes the predicate as a source string here (rather
-			// than a closure calling extractPairs) because Puppeteer serializes a
+			// than a closure calling extractNodes) because Puppeteer serializes a
 			// function argument by its own source text alone — a reference to a
 			// module-scope function would not resolve inside the page. Splicing in
-			// extractPairs's source keeps this the same one copy used below.
-			await page.waitForFunction(`(${extractPairs.toString()})().length > 0`, { timeout: 45_000 });
+			// extractNodes's source keeps this the same one copy used below.
+			await page.waitForFunction(
+				`(${extractNodes.toString()})().some((node) => node.kind === 'value')`,
+				{ timeout: 45_000 }
+			);
 		} catch {
 			throw new Error("SEO Quake's toolbar did not appear within 45 seconds.");
 		}
 
-		const pairs = await page.evaluate(extractPairs);
+		const pairs = pairLabels(await page.evaluate(extractNodes));
 
 		if (pairs.length === 0) {
 			throw new Error('SEO Quake toolbar rendered but contained no parameter cells.');

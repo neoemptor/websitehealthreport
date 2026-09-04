@@ -149,6 +149,71 @@ describe('fetchSearchAnalytics', () => {
 		).rejects.toThrow("UNAVAILABLE: Google's quota for this account is exhausted for now.");
 	});
 
+	it('throws the quota UNAVAILABLE message when the totals request 429s', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(new Response(JSON.stringify({ rows: [] }), { status: 200 }))
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: { status: 'RESOURCE_EXHAUSTED' } }), { status: 429 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		await expect(
+			fetchSearchAnalytics('example.com', 'secret-token', {
+				startDate: '2026-08-07',
+				endDate: '2026-09-03'
+			})
+		).rejects.toThrow("UNAVAILABLE: Google's quota for this account is exhausted for now.");
+	});
+
+	it('keeps the queries and reports null totals when only the totals call 403s', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ rows: [{ keys: ['doors'], clicks: 4, impressions: 40 }] }), {
+					status: 200
+				})
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ error: { status: 'PERMISSION_DENIED' } }), { status: 403 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		const data = await fetchSearchAnalytics('example.com', 'secret-token', {
+			startDate: '2026-08-07',
+			endDate: '2026-09-03'
+		});
+
+		expect(data.totals).toBeNull();
+		expect(data.topQueries).toEqual([{ query: 'doors', clicks: 4, impressions: 40 }]);
+		// The property already answered the queries, so the URL-prefix form is
+		// never tried: two calls, both on sc-domain.
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		for (const call of fetchMock.mock.calls) {
+			expect(call[0] as string).toContain(encodeURIComponent('sc-domain:example.com'));
+		}
+	});
+
+	it('leaves a Google error message untouched when there is no token to scrub', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				async () =>
+					new Response(
+						JSON.stringify({ error: { status: 'INTERNAL', message: 'something broke' } }),
+						{ status: 500 }
+					)
+			)
+		);
+
+		await expect(
+			fetchSearchAnalytics('example.com', '', {
+				startDate: '2026-08-07',
+				endDate: '2026-09-03'
+			})
+		).rejects.toThrow('Google API request failed with HTTP 500 (INTERNAL: something broke).');
+	});
+
 	it('does not raise a raw SyntaxError when the error body is not JSON', async () => {
 		vi.stubGlobal(
 			'fetch',

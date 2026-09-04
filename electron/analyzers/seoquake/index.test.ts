@@ -4,7 +4,9 @@ type FakePage = {
 	setViewport: (opts: unknown) => Promise<void>;
 	goto: (url: string, opts?: unknown) => Promise<void>;
 	waitForFunction: (fn: () => unknown, opts?: unknown) => Promise<unknown>;
-	evaluate: (fn: () => unknown) => Promise<Array<{ label: string; value: string }>>;
+	evaluate: (
+		fn: () => unknown
+	) => Promise<Array<{ kind: 'label' | 'value'; text: string; parent: number }>>;
 	close: () => Promise<void>;
 };
 
@@ -201,11 +203,16 @@ describe('seoquake analyze', () => {
 	});
 
 	it('resolves with parsed toolbar data and closes the browser once', async () => {
-		const pairs = [
-			{ label: 'Rank', value: '38.5M' },
-			{ label: 'L', value: '213' },
-			{ label: 'LD', value: '435' },
-			{ label: 'PIN', value: '12' }
+		// The in-page extractor reports a flat node list; pairing happens in Node.
+		const nodes = [
+			{ kind: 'label' as const, text: 'Rank', parent: 0 },
+			{ kind: 'value' as const, text: '38.5M', parent: 0 },
+			{ kind: 'label' as const, text: 'L', parent: 1 },
+			{ kind: 'value' as const, text: '213', parent: 1 },
+			{ kind: 'label' as const, text: 'LD', parent: 2 },
+			{ kind: 'value' as const, text: '435', parent: 2 },
+			{ kind: 'label' as const, text: 'PIN', parent: 3 },
+			{ kind: 'value' as const, text: '12', parent: 3 }
 		];
 		state.launch = async () => {
 			state.launches++;
@@ -214,7 +221,7 @@ describe('seoquake analyze', () => {
 					setViewport: async () => {},
 					goto: async () => {},
 					waitForFunction: async () => {},
-					evaluate: async () => pairs,
+					evaluate: async () => nodes,
 					close: async () => {}
 				}),
 				close: async () => {

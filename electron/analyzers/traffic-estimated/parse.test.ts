@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { parseSemrushCsv, toEstimatedTraffic, isQuotaError, classifyError } from './parse';
+import {
+	parseSemrushCsv,
+	toEstimatedTraffic,
+	isQuotaError,
+	classifyError,
+	isNothingFound
+} from './parse';
 
 // Semrush returns semicolon-separated values with a header line.
 const body =
@@ -77,5 +83,14 @@ describe('classifyError', () => {
 
 	it.each([50, 100, 500, 999])('classifies unrelated error %d as failed', (code) => {
 		expect(classifyError(code)).toBe('failed');
+	});
+
+	it('detects a NOTHING FOUND body, however it is wrapped', () => {
+		expect(isNothingFound('ERROR 50 :: NOTHING FOUND')).toBe(true);
+		expect(isNothingFound('nothing found')).toBe(true);
+	});
+
+	it('does not treat a normal CSV body as NOTHING FOUND', () => {
+		expect(isNothingFound(body)).toBe(false);
 	});
 });

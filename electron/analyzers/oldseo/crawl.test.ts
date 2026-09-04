@@ -25,6 +25,10 @@ describe('sameSite', () => {
 		expect(sameSite('/brochure.pdf', base)).toBeNull();
 		expect(sameSite('/img/logo.PNG', base)).toBeNull();
 	});
+	it('normalises a trailing slash away except for the root path', () => {
+		expect(sameSite('/a/', base)).toBe(sameSite('/a', base));
+		expect(sameSite('/', base)).toBe('https://www.example.com.au/');
+	});
 });
 
 describe('robots', () => {

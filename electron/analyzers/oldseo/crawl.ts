@@ -38,6 +38,9 @@ export function sameSite(link: string, base: URL): string | null {
 	if (SKIP_EXTENSIONS.some((ext) => lower.endsWith(ext))) return null;
 	url.hash = '';
 	url.search = '';
+	if (url.pathname.length > 1 && url.pathname.endsWith('/')) {
+		url.pathname = url.pathname.slice(0, -1);
+	}
 	return url.toString();
 }
 
@@ -95,6 +98,7 @@ export async function fetchAsGooglebot(
 	signal: AbortSignal,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string | null> {
+	if (signal.aborted) return null;
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), BOT_TIMEOUT_MS);
 	const onAbort = () => controller.abort();
@@ -160,14 +164,17 @@ export function snapshotScript(): (url: string) => RawSnapshot {
 						n = n.parentElement;
 					}
 				})()
-			].some((n) => UI_PATTERN.test(n.id + ' ' + n.className));
+			].some((n) => UI_PATTERN.test(n.id + ' ' + (n.getAttribute('class') ?? '')));
 
 		const hiddenReason = (el: Element, text: string): HiddenReason | null => {
 			let node: Element | null = el;
 			while (node) {
-				const cs = getComputedStyle(node);
-				if (cs.display === 'none') return isUi(el) ? null : 'display-none';
-				if (cs.opacity === '0') return 'opacity-zero';
+				if (getComputedStyle(node).display === 'none') return isUi(el) ? null : 'display-none';
+				node = node.parentElement;
+			}
+			node = el;
+			while (node) {
+				if (getComputedStyle(node).opacity === '0') return 'opacity-zero';
 				node = node.parentElement;
 			}
 			const cs = getComputedStyle(el);
@@ -205,7 +212,7 @@ export function snapshotScript(): (url: string) => RawSnapshot {
 		}
 
 		const meta = (name: string) =>
-			document.querySelector(`meta[name="${name}"]`)?.getAttribute('content') ?? null;
+			document.querySelector(`meta[name="${name}" i]`)?.getAttribute('content') ?? null;
 
 		return {
 			url,

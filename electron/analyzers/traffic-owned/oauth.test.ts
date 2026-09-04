@@ -6,6 +6,7 @@ import {
 	buildAuthUrl,
 	createPkce,
 	exchangeCode,
+	generateState,
 	refreshTokenKey
 } from './oauth';
 import type { CredentialStore } from '../../credentials';
@@ -81,6 +82,36 @@ describe('buildAuthUrl', () => {
 	it('carries the PKCE challenge and method', () => {
 		expect(url().searchParams.get('code_challenge')).toBe('test-challenge');
 		expect(url().searchParams.get('code_challenge_method')).toBe('S256');
+	});
+
+	it('carries the state when one is given', () => {
+		const withState = new URL(
+			buildAuthUrl({
+				clientId: 'cid',
+				redirectUri: 'http://127.0.0.1:9999',
+				scopes: SCOPES,
+				codeChallenge: 'test-challenge',
+				state: 'the-state'
+			})
+		);
+		expect(withState.searchParams.get('state')).toBe('the-state');
+	});
+
+	it('omits state when none is given', () => {
+		expect(url().searchParams.has('state')).toBe(false);
+	});
+});
+
+describe('generateState', () => {
+	it('returns a base64url string decoding to 16 random bytes', () => {
+		const state = generateState();
+		expect(state).toMatch(/^[A-Za-z0-9_-]+$/);
+		const decoded = Buffer.from(state, 'base64url');
+		expect(decoded.length).toBe(16);
+	});
+
+	it('returns a different value on each call', () => {
+		expect(generateState()).not.toBe(generateState());
 	});
 });
 

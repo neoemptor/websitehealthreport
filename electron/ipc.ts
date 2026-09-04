@@ -70,9 +70,8 @@ export function registerIpc(deps: {
 		'google:authorise',
 		wrap('google:authorise', async (rawDomain: string) => {
 			const domain = normaliseDomain(rawDomain);
-			const { buildAuthUrl, createPkce, exchangeCode, refreshTokenKey, SCOPES } = await import(
-				'./analyzers/traffic-owned/oauth'
-			);
+			const { buildAuthUrl, createPkce, exchangeCode, generateState, refreshTokenKey, SCOPES } =
+				await import('./analyzers/traffic-owned/oauth');
 
 			const clientId = await credentials.get('google.clientId');
 			const clientSecret = await credentials.get('google.clientSecret');
@@ -81,6 +80,7 @@ export function registerIpc(deps: {
 			}
 
 			const { verifier, challenge } = createPkce();
+			const state = generateState();
 			const authWindow = new ElectronBrowserWindow({
 				width: 600,
 				height: 800,
@@ -89,25 +89,52 @@ export function registerIpc(deps: {
 
 			try {
 				const code = await new Promise<string>((resolve, reject) => {
-					const onNavigate = (_event: unknown, url: string): void => {
-						if (!url.startsWith(GOOGLE_REDIRECT_URI)) return;
-						const params = new URL(url).searchParams;
-						const returned = params.get('code');
-						if (returned) resolve(returned);
-						else reject(new Error(params.get('error') ?? 'Sign-in was cancelled.'));
+					let settled = false;
+					const finish = (fn: () => void): void => {
+						if (settled) return;
+						settled = true;
+						fn();
 					};
-					// Google's loopback redirect can arrive as either event depending
-					// on how the consent page hands off, so both are watched.
+					const onNavigate = (event: { preventDefault(): void }, url: string): void => {
+						let target: URL;
+						try {
+							target = new URL(url);
+						} catch {
+							return;
+						}
+						if (target.origin !== GOOGLE_REDIRECT_URI) return;
+						event.preventDefault();
+						const params = target.searchParams;
+						const returned = params.get('code');
+						const returnedState = params.get('state');
+						finish(() => {
+							if (!returned) {
+								reject(new Error(params.get('error') ?? 'Sign-in was cancelled.'));
+							} else if (returnedState !== state) {
+								reject(new Error('Sign-in did not complete correctly.'));
+							} else {
+								resolve(returned);
+							}
+						});
+					};
+					// Google's loopback redirect can arrive as any of these events
+					// depending on how the consent page hands off, so all are
+					// watched, and the loopback navigation is prevented so no
+					// connection-refused page ever renders.
 					authWindow.webContents.on('will-redirect', onNavigate);
 					authWindow.webContents.on('will-navigate', onNavigate);
-					authWindow.on('closed', () => reject(new Error('Sign-in was cancelled.')));
+					authWindow.webContents.on('did-navigate', (event, url) =>
+						onNavigate({ preventDefault: () => {} }, url)
+					);
+					authWindow.on('closed', () => finish(() => reject(new Error('Sign-in was cancelled.'))));
 
 					void authWindow.loadURL(
 						buildAuthUrl({
 							clientId,
 							redirectUri: GOOGLE_REDIRECT_URI,
 							scopes: SCOPES,
-							codeChallenge: challenge
+							codeChallenge: challenge,
+							state
 						})
 					);
 				});

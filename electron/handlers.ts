@@ -67,10 +67,20 @@ export type StartRunInput = {
 export function buildHandlers(deps: HandlerDeps) {
 	// Owned traffic is read only for the site whose owner connected their
 	// Google account, so the analyzer needs to know which domain in a run is
-	// the client. The set is keyed by normalised client URL and holds only the
-	// runs currently executing.
-	const clientsInFlight = new Set<string>();
-	const isClient = (domain: string): boolean => clientsInFlight.has(domain);
+	// the client. Keyed by normalised client URL, holding a refcount of the
+	// runs currently executing for that client — two overlapping runs sharing
+	// a client (e.g. a resume racing a fresh start) must both settle before
+	// the client stops being a client.
+	const clientsInFlight = new Map<string, number>();
+	const isClient = (domain: string): boolean => (clientsInFlight.get(domain) ?? 0) > 0;
+	const addClientInFlight = (domain: string): void => {
+		clientsInFlight.set(domain, (clientsInFlight.get(domain) ?? 0) + 1);
+	};
+	const removeClientInFlight = (domain: string): void => {
+		const count = clientsInFlight.get(domain) ?? 0;
+		if (count <= 1) clientsInFlight.delete(domain);
+		else clientsInFlight.set(domain, count - 1);
+	};
 
 	const registry = createRegistry([
 		lighthouseAnalyzer,
@@ -102,7 +112,7 @@ export function buildHandlers(deps: HandlerDeps) {
 		void orchestrator
 			.settled(id)
 			.catch(() => undefined)
-			.finally(() => clientsInFlight.delete(client));
+			.finally(() => removeClientInFlight(client));
 	};
 
 	// One discovery at a time: a second click replaces the first, and the
@@ -128,7 +138,7 @@ export function buildHandlers(deps: HandlerDeps) {
 			const settings = await settingsStore.read();
 
 			deps.logger.info('run:start', { client, competitors });
-			clientsInFlight.add(client);
+			addClientInFlight(client);
 			const run = await orchestrator.start({
 				client,
 				competitors,
@@ -145,7 +155,7 @@ export function buildHandlers(deps: HandlerDeps) {
 			// The client is only known from the stored run, so it is read before
 			// the resume rather than passed in.
 			const existing = await storage.load(runId);
-			clientsInFlight.add(existing.client);
+			addClientInFlight(existing.client);
 			const run = await orchestrator.resume(runId, settings.analyzers);
 			forgetClientWhenSettled(run.id, existing.client);
 			return run;

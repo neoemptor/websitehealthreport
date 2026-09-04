@@ -34,11 +34,16 @@ export function refreshTokenKey(domain: string): string {
 	return `google.refresh.${new URL(domain).hostname.replace(/^www\./, '')}`;
 }
 
+export function generateState(): string {
+	return base64url(crypto.randomBytes(16));
+}
+
 export function buildAuthUrl(opts: {
 	clientId: string;
 	redirectUri: string;
 	scopes: string[];
 	codeChallenge: string;
+	state?: string;
 }): string {
 	const url = new URL(AUTH_URL);
 	url.searchParams.set('client_id', opts.clientId);
@@ -51,6 +56,7 @@ export function buildAuthUrl(opts: {
 	url.searchParams.set('include_granted_scopes', 'true');
 	url.searchParams.set('code_challenge', opts.codeChallenge);
 	url.searchParams.set('code_challenge_method', 'S256');
+	if (opts.state) url.searchParams.set('state', opts.state);
 	return url.toString();
 }
 

@@ -108,6 +108,17 @@
 		}
 	}
 
+	function normaliseHost(value: string): string {
+		const trimmed = value.trim();
+		if (trimmed.length === 0) return '';
+		try {
+			const withScheme = trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+			return new URL(withScheme).hostname.replace(/^www\./, '');
+		} catch {
+			return trimmed.toLowerCase().replace(/^www\./, '');
+		}
+	}
+
 	function addGa4Row() {
 		ga4Rows = [...ga4Rows, { host: '', propertyId: '' }];
 	}
@@ -192,16 +203,7 @@
 					'traffic-owned': {
 						ga4PropertyIds: Object.fromEntries(
 							ga4Rows
-								.map(
-									(row) =>
-										[
-											row.host
-												.trim()
-												.toLowerCase()
-												.replace(/^www\./, ''),
-											row.propertyId.trim()
-										] as const
-								)
+								.map((row) => [normaliseHost(row.host), row.propertyId.trim()] as const)
 								.filter(([host, propertyId]) => host.length > 0 && propertyId.length > 0)
 						),
 						days: trafficOwnedDays

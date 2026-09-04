@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -23,7 +23,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-	await fs.rm(dir, { recursive: true, force: true });
+	// maxRetries/retryDelay absorb the odd ENOTEMPTY/EBUSY from a file handle
+	// Windows hasn't released yet (e.g. right after a background run settles).
+	await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 });
 
 describe('buildHandlers', () => {
@@ -316,5 +318,64 @@ describe('client identity during a run', () => {
 
 		await handlers.resumeRun(run.id);
 		expect(handlers.isClient('https://example.com/')).toBe(true);
+	});
+
+	it('keeps a shared client registered until both overlapping runs settle', async () => {
+		const handlers = buildHandlers(base());
+
+		// The second run is given a real analyzer (wayback) whose single network
+		// call is held open below, so it reliably outlasts the first run, which
+		// has no analyzers and settles immediately — with both empty, they would
+		// otherwise race to settle at the same instant and the test could not
+		// tell "one settled" from "both settled".
+		let releaseSecond = () => {};
+		const secondGate = new Promise<void>((resolve) => (releaseSecond = resolve));
+		const fetchMock = vi.fn(async (url: string) => {
+			if (typeof url === 'string' && url.includes('web.archive.org')) {
+				await secondGate;
+				return new Response('', { status: 200 });
+			}
+			throw new Error(`Unexpected fetch in this test: ${url}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+
+		try {
+			const first = await handlers.startRun({
+				client: 'example.com',
+				competitors: [],
+				enabledAnalyzers: []
+			});
+
+			// Written directly rather than via startRun, since makeRunId is only
+			// second-granular and the two would otherwise collide.
+			const secondId = '2020-01-01T000000-example-com';
+			await fs.mkdir(path.join(dir, 'runs'), { recursive: true });
+			await fs.writeFile(
+				path.join(dir, 'runs', `${secondId}.json`),
+				JSON.stringify({
+					id: secondId,
+					createdAt: new Date(0).toISOString(),
+					client: 'https://example.com/',
+					competitors: [],
+					enabledAnalyzers: ['wayback'],
+					status: 'aborted',
+					domains: [{ domain: 'https://example.com/', role: 'client', analyzers: {} }]
+				})
+			);
+			await handlers.resumeRun(secondId);
+
+			expect(handlers.isClient('https://example.com/')).toBe(true);
+
+			await handlers.settled(first.id);
+			// The other run sharing this client is still mid-flight.
+			expect(handlers.isClient('https://example.com/')).toBe(true);
+
+			releaseSecond();
+			await handlers.settled(secondId);
+			await new Promise((r) => setTimeout(r, 5));
+			expect(handlers.isClient('https://example.com/')).toBe(false);
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 });

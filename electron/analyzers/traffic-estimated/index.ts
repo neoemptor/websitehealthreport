@@ -1,0 +1,95 @@
+import type { Analyzer } from '../types';
+import type { CredentialStore } from '../../credentials';
+import { fetchText } from '../../http';
+import { classifyError, isQuotaError, parseSemrushCsv, toEstimatedTraffic } from './parse';
+import type { EstimatedTrafficData } from './parse';
+
+export type TrafficEstimatedSettings = { database: string };
+
+export type TrafficEstimatedData = EstimatedTrafficData & { nothingFound: boolean };
+
+export const SEMRUSH_CREDENTIAL_KEY = 'semrush.apiKey';
+
+const ENDPOINT = 'https://api.semrush.com/';
+
+/** Matches Semrush's "ERROR <code> :: MESSAGE" body format, without ever touching the query string. */
+function matchErrorCode(body: string): number | null {
+	const match = body.match(/ERROR\s+(\d+)/i);
+	return match ? Number(match[1]) : null;
+}
+
+export function createTrafficEstimatedAnalyzer(
+	credentials: CredentialStore
+): Analyzer<TrafficEstimatedSettings> {
+	return {
+		id: 'traffic-estimated',
+		label: 'Traffic (estimated)',
+		concurrency: 'parallel',
+		timeoutMs: 30_000,
+		// 'au' is the Australian database; clients are Australian businesses.
+		defaultSettings: { database: 'au' },
+
+		async preflight() {
+			return (await credentials.has(SEMRUSH_CREDENTIAL_KEY))
+				? { available: true }
+				: { available: false, reason: 'No Semrush API key is saved in Settings.' };
+		},
+
+		async analyze(domain, settings, signal): Promise<TrafficEstimatedData> {
+			const key = await credentials.get(SEMRUSH_CREDENTIAL_KEY);
+			if (!key) {
+				throw new Error('UNAVAILABLE: No Semrush API key is saved in Settings.');
+			}
+
+			const params = new URLSearchParams({
+				type: 'domain_rank',
+				key,
+				domain: new URL(domain).hostname.replace(/^www\./, ''),
+				database: settings.database,
+				export_columns: 'Db,Dt,Or,Ot,Oc,Ad'
+			});
+
+			// The key never reaches an error message or log line: on failure we
+			// report the HTTP status or the Semrush error code, never the URL.
+			const { status, body } = await fetchText(`${ENDPOINT}?${params.toString()}`, {
+				signal,
+				timeoutMs: 25_000
+			});
+
+			// Running out of API units is a billing state the operator can fix, not
+			// a failure of the analyzer, so it is reported as unavailable.
+			if (isQuotaError(body)) {
+				const code = matchErrorCode(body);
+				throw new Error(`UNAVAILABLE: Semrush reported an account issue (error ${code ?? '?'}).`);
+			}
+
+			// Semrush reports an unknown/unindexed domain as a normal response
+			// body, not an HTTP error, so it is an ok result with null figures.
+			if (/NOTHING FOUND/i.test(body)) {
+				return {
+					organicKeywords: null,
+					organicTraffic: null,
+					organicCost: null,
+					adwordsKeywords: null,
+					nothingFound: true
+				};
+			}
+
+			const code = matchErrorCode(body);
+			if (code !== null) {
+				const kind = classifyError(code);
+				throw new Error(
+					kind === 'unavailable'
+						? `UNAVAILABLE: Semrush reported an account issue (error ${code}).`
+						: `Semrush reported error ${code}.`
+				);
+			}
+
+			if (status < 200 || status >= 300) {
+				throw new Error(`Semrush responded with status ${status}.`);
+			}
+
+			return { ...toEstimatedTraffic(parseSemrushCsv(body)), nothingFound: false };
+		}
+	};
+}

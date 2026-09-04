@@ -558,6 +558,159 @@ function contentSeverity(d: ContentData): Severity {
 	return { word: 'Good', tone: 'ok', finding };
 }
 
+type TrafficEstimatedData = {
+	organicKeywords: number | null;
+	organicTraffic: number | null;
+	organicCost: number | null;
+	adwordsKeywords: number | null;
+	nothingFound: boolean;
+};
+
+type SourceResult<T> = { status: 'ok'; data: T } | { status: 'unavailable'; reason: string };
+
+type GscTotals = { clicks: number; impressions: number; ctr: number; position: number };
+type GscData = {
+	totals: GscTotals;
+	topQueries: Array<{ query: string; clicks: number; impressions: number }>;
+};
+type Ga4Data = { sessions: number; users: number; engagementRate: number };
+
+type TrafficOwnedData = {
+	searchConsole: SourceResult<GscData>;
+	ga4: SourceResult<Ga4Data>;
+	range: { start: string; end: string };
+};
+
+function isTrafficEstimated(d: unknown): d is TrafficEstimatedData {
+	const t = d as TrafficEstimatedData | null;
+	return (
+		!!t &&
+		(t.organicKeywords === null || isNumber(t.organicKeywords)) &&
+		(t.organicTraffic === null || isNumber(t.organicTraffic)) &&
+		(t.organicCost === null || isNumber(t.organicCost)) &&
+		(t.adwordsKeywords === null || isNumber(t.adwordsKeywords)) &&
+		typeof t.nothingFound === 'boolean'
+	);
+}
+
+function trafficEstimatedSeverity(d: TrafficEstimatedData): Severity {
+	const allNull =
+		d.organicKeywords === null &&
+		d.organicTraffic === null &&
+		d.organicCost === null &&
+		d.adwordsKeywords === null;
+
+	if (d.nothingFound || allNull) {
+		return {
+			word: 'No estimate',
+			tone: 'na',
+			finding: 'Semrush has no estimate for this site.'
+		};
+	}
+
+	const visits = d.organicTraffic ?? 0;
+	const keywords = d.organicKeywords ?? 0;
+	return {
+		word: 'Measured',
+		tone: 'ok',
+		finding: `About ${visits.toLocaleString(
+			'en-AU'
+		)} visits a month (estimate), ranking for ${plural(keywords, 'keyword')}.`
+	};
+}
+
+function isSourceResult<T>(v: unknown, isData: (d: unknown) => d is T): v is SourceResult<T> {
+	const s = v as SourceResult<T> | null;
+	if (!s || typeof s !== 'object') return false;
+	if (s.status === 'unavailable') return typeof s.reason === 'string';
+	if (s.status === 'ok') return isData(s.data);
+	return false;
+}
+
+function isGscData(d: unknown): d is GscData {
+	const g = d as GscData | null;
+	return (
+		!!g &&
+		!!g.totals &&
+		isNumber(g.totals.clicks) &&
+		isNumber(g.totals.impressions) &&
+		isNumber(g.totals.ctr) &&
+		isNumber(g.totals.position) &&
+		Array.isArray(g.topQueries) &&
+		g.topQueries.every(
+			(q) => typeof q?.query === 'string' && isNumber(q?.clicks) && isNumber(q?.impressions)
+		)
+	);
+}
+
+function isGa4Data(d: unknown): d is Ga4Data {
+	const g = d as Ga4Data | null;
+	return !!g && isNumber(g.sessions) && isNumber(g.users) && isNumber(g.engagementRate);
+}
+
+function isTrafficOwned(d: unknown): d is TrafficOwnedData {
+	const t = d as TrafficOwnedData | null;
+	return (
+		!!t &&
+		isSourceResult(t.searchConsole, isGscData) &&
+		isSourceResult(t.ga4, isGa4Data) &&
+		!!t.range &&
+		typeof t.range.start === 'string' &&
+		typeof t.range.end === 'string'
+	);
+}
+
+function rangeDays(range: { start: string; end: string }): number {
+	const ms = Date.parse(range.end) - Date.parse(range.start);
+	return Math.max(0, Math.round(ms / 86_400_000));
+}
+
+function trafficOwnedSeverity(d: TrafficOwnedData): Severity {
+	const days = rangeDays(d.range);
+
+	if (d.searchConsole.status === 'ok' && d.ga4.status === 'ok') {
+		const { clicks, impressions } = d.searchConsole.data.totals;
+		const base = `${clicks.toLocaleString('en-AU')} clicks from ${impressions.toLocaleString(
+			'en-AU'
+		)} impressions in the last ${plural(days, 'day')}`;
+		return {
+			word: 'Measured',
+			tone: 'ok',
+			finding: `${base}; ${d.ga4.data.sessions.toLocaleString('en-AU')} GA4 sessions.`
+		};
+	}
+
+	if (d.searchConsole.status === 'ok' && d.ga4.status === 'unavailable') {
+		const { clicks, impressions } = d.searchConsole.data.totals;
+		return {
+			word: 'Measured',
+			tone: 'ok',
+			finding: `${clicks.toLocaleString('en-AU')} clicks from ${impressions.toLocaleString(
+				'en-AU'
+			)} impressions in the last ${plural(days, 'day')}. GA4 is not connected.`
+		};
+	}
+
+	if (d.searchConsole.status === 'unavailable' && d.ga4.status === 'ok') {
+		return {
+			word: 'Measured',
+			tone: 'ok',
+			finding: `${d.ga4.data.sessions.toLocaleString('en-AU')} GA4 sessions in the last ${plural(
+				days,
+				'day'
+			)}; Search Console is not connected.`
+		};
+	}
+
+	// Both unavailable: the Search Console reason is written for a client (it
+	// never carries a secret or a stack trace), so it can stand alone here.
+	return {
+		word: 'Not connected',
+		tone: 'na',
+		finding: d.searchConsole.status === 'unavailable' ? d.searchConsole.reason : ''
+	};
+}
+
 export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): Severity {
 	if (!result) return { word: 'Not run', tone: 'na', finding: 'This check was not run.' };
 
@@ -588,6 +741,10 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 	if (id === 'aeo' && isAeo(result.data)) return aeoSeverity(result.data);
 	if (id === 'seoquake' && isSeoQuake(result.data)) return seoQuakeSeverity(result.data);
 	if (id === 'content' && isContent(result.data)) return contentSeverity(result.data);
+	if (id === 'traffic-estimated' && isTrafficEstimated(result.data))
+		return trafficEstimatedSeverity(result.data);
+	if (id === 'traffic-owned' && isTrafficOwned(result.data))
+		return trafficOwnedSeverity(result.data);
 
 	// A check with no component yet, or data in an unexpected shape: say it
 	// measured, and let the raw values below carry the detail.

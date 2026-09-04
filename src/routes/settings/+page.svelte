@@ -324,12 +324,15 @@
 				</p>
 				<div class="mt-3 flex items-center gap-3">
 					<button
-						class="btn-quiet"
+						class="btn btn-quiet py-2 px-4 text-[13px]"
 						on:click={() => saveCredential('semrush.apiKey', semrushKey, () => (semrushKey = ''))}
 					>
 						Save key
 					</button>
-					<button class="btn-quiet" on:click={() => forgetCredential('semrush.apiKey')}>
+					<button
+						class="btn btn-quiet py-2 px-4 text-[13px]"
+						on:click={() => forgetCredential('semrush.apiKey')}
+					>
 						Remove
 					</button>
 				</div>
@@ -347,13 +350,16 @@
 				</p>
 				<div class="mt-3 flex items-center gap-3">
 					<button
-						class="btn-quiet"
+						class="btn btn-quiet py-2 px-4 text-[13px]"
 						on:click={() =>
 							saveCredential('google.clientId', googleClientId, () => (googleClientId = ''))}
 					>
 						Save client ID
 					</button>
-					<button class="btn-quiet" on:click={() => forgetCredential('google.clientId')}>
+					<button
+						class="btn btn-quiet py-2 px-4 text-[13px]"
+						on:click={() => forgetCredential('google.clientId')}
+					>
 						Remove
 					</button>
 				</div>
@@ -372,7 +378,7 @@
 				</p>
 				<div class="mt-3 flex items-center gap-3">
 					<button
-						class="btn-quiet"
+						class="btn btn-quiet py-2 px-4 text-[13px]"
 						on:click={() =>
 							saveCredential(
 								'google.clientSecret',
@@ -382,7 +388,10 @@
 					>
 						Save client secret
 					</button>
-					<button class="btn-quiet" on:click={() => forgetCredential('google.clientSecret')}>
+					<button
+						class="btn btn-quiet py-2 px-4 text-[13px]"
+						on:click={() => forgetCredential('google.clientSecret')}
+					>
 						Remove
 					</button>
 				</div>
@@ -398,7 +407,11 @@
 					/>
 				</div>
 				<div class="mt-3 flex items-center gap-3">
-					<button class="btn-quiet" on:click={connectGoogle} disabled={connecting}>
+					<button
+						class="btn btn-quiet py-2 px-4 text-[13px]"
+						on:click={connectGoogle}
+						disabled={connecting}
+					>
 						Connect Google account
 					</button>
 					{#if connectStatus}
@@ -435,13 +448,18 @@
 									/>
 								</td>
 								<td class="pb-2">
-									<button class="btn-quiet" on:click={() => removeGa4Row(i)}>Remove</button>
+									<button
+										class="btn btn-quiet py-2 px-4 text-[13px]"
+										on:click={() => removeGa4Row(i)}>Remove</button
+									>
 								</td>
 							</tr>
 						{/each}
 					</tbody>
 				</table>
-				<button class="btn-quiet mt-2" on:click={addGa4Row}>Add a site</button>
+				<button class="btn btn-quiet py-2 px-4 text-[13px] mt-2" on:click={addGa4Row}
+					>Add a site</button
+				>
 
 				<p role="note" class="mt-4 text-[12px] text-white/50">
 					Owned traffic is read only for sites whose owner has connected their Google account.

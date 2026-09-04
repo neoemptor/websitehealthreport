@@ -20,7 +20,7 @@ describe('parseSecurityHeaders', () => {
 		const headers = new Headers({ 'x-powered-by': 'PHP/7.2.1' });
 		const finding = parseSecurityHeaders(headers).find((f) => f.header === 'x-powered-by');
 		expect(finding?.present).toBe(true);
-		expect(finding?.note).toMatch(/disclos/i);
+		expect(finding?.note).toMatch(/software|target/i);
 	});
 
 	it('checks every header in the OWASP set', () => {

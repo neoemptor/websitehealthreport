@@ -60,7 +60,7 @@ const CHECKS: HeaderCheck[] = [
 	{
 		header: 'x-powered-by',
 		severity: 'low',
-		note: 'Version disclosure: reveals the server stack to attackers.',
+		note: 'Reveals what software runs the site, which makes it easier to target.',
 		badWhenPresent: true
 	}
 ];

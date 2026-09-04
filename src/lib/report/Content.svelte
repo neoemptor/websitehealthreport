@@ -10,6 +10,8 @@
 	// data may be malformed (an unexpected shape reaching the report); never throw on it.
 	$: misspellings = Array.isArray(data?.spelling?.misspellings) ? data.spelling.misspellings : [];
 	$: grammar = data?.grammar;
+	$: grammarFindings =
+		grammar?.status === 'ok' && Array.isArray(grammar.findings) ? grammar.findings : [];
 </script>
 
 <div class="mt-3">
@@ -43,12 +45,12 @@
 		<p class="mt-1.5 text-[12px] text-dark-500">{grammar.reason}</p>
 	{:else if grammar?.status === 'failed'}
 		<p class="mt-1.5 text-[12px] text-dark-500">{grammar.error}</p>
-	{:else if grammar?.status === 'ok' && grammar.findings.length === 0}
+	{:else if grammar?.status === 'ok' && grammarFindings.length === 0}
 		<p class="mt-1.5 text-[12px] text-dark-500">No grammar issues found.</p>
 	{:else if grammar?.status === 'ok'}
 		<table class="mt-1.5 w-full break-inside-avoid border-collapse text-left">
 			<tbody>
-				{#each grammar.findings as f}
+				{#each grammarFindings as f}
 					<tr class="break-inside-avoid border-b border-dark-200">
 						<td class="py-1.5 align-top">
 							<span class="block text-[12px] text-dark-700">{f.message}</span>

@@ -533,9 +533,9 @@ describe('severityOf — seoquake', () => {
 		expect(s.finding).toBe('Semrush rank 12,345; 6,789 backlinks from 42 domains.');
 	});
 
-	it('names missing parts as "no data" rather than omitting them', () => {
+	it('says backlinks not reported when backlinks or linkingDomains is null', () => {
 		const s = severityOf('seoquake', ok({ semrushRank: 100 }));
-		expect(s.finding).toBe('Semrush rank 100; no data backlinks from no data domains.');
+		expect(s.finding).toBe('Semrush rank 100; backlinks not reported.');
 	});
 });
 
@@ -619,6 +619,11 @@ describe('severityOf — content', () => {
 	it('notes grammar was not checked when unavailable', () => {
 		const s = severityOf('content', ok([], { status: 'unavailable', reason: 'Turned off.' }));
 		expect(s.finding).toMatch(/Grammar was not checked\.$/);
+	});
+
+	it('falls back to Measured when grammar is ok but findings is not an array', () => {
+		const s = severityOf('content', ok([], { status: 'ok', findings: undefined }));
+		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
 	});
 
 	it('a failed grammar check does not stop misspellings being reported', () => {

@@ -73,6 +73,27 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
 	}
 };
 
+/**
+ * Words drawn from the site's own hostname (e.g. "cjsgaragedoors" from
+ * cjsgaragedoors.com.au) are business names, not misspellings, so they are
+ * added to the ignore list for this run only — settings.ignoreWords is left
+ * untouched. TLD-shaped parts (under 3 letters, like "com" or "au") are
+ * dropped rather than flagged as words to ignore.
+ */
+function hostnameWords(domain: string): string[] {
+	let hostname: string;
+	try {
+		hostname = new URL(domain).hostname;
+	} catch {
+		return [];
+	}
+
+	return hostname
+		.split(/[.-]/)
+		.map((part) => part.trim())
+		.filter((part) => part.length >= 3);
+}
+
 async function scrape(
 	browser: Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>,
 	domain: string,
@@ -91,7 +112,8 @@ async function scrape(
 	}
 
 	const checker = await createSpellChecker();
-	const misspellings = checker.check(extractWords(text), settings.ignoreWords);
+	const ignoreWords = [...settings.ignoreWords, ...hostnameWords(domain)];
+	const misspellings = checker.check(extractWords(text), ignoreWords);
 
 	// Spelling never depends on the grammar provider: a provider switched off
 	// is reported directly rather than going through checkGrammar, and any

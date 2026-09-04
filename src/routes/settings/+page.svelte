@@ -2,9 +2,11 @@
 	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
 	import type { Settings } from '../../../electron/settings/store';
-	import type { SeoQuakeSettings } from '../../../electron/analyzers/seoquake';
-	import type { ContentSettings } from '../../../electron/analyzers/content';
-	import type { OldSeoSettings } from '../../../electron/analyzers/oldseo';
+	import type {
+		SeoQuakeSettings,
+		ContentSettings,
+		OldSeoSettings
+	} from '$lib/shared/settings-shapes';
 	import { DEFAULT_DISCOVERY_SETTINGS } from '$lib/shared/discovery';
 
 	// electron/settings/store.ts pulls in node's fs/path, so DEFAULT_SETTINGS
@@ -25,6 +27,10 @@
 	let saving = false;
 	let saved = '';
 	let error = '';
+	// If readSettings() throws, the real settings on disk are unknown — saving
+	// the defaults shape over them would silently discard whatever is really
+	// there, so Save stays disabled until a load actually succeeds.
+	let loadFailed = false;
 
 	// Local form fields, flattened out of settings.analyzers for simple binding.
 	let grammarProvider: ContentSettings['grammar']['provider'] = DEFAULT_CONTENT.grammar.provider;
@@ -37,26 +43,32 @@
 	onMount(async () => {
 		try {
 			settings = await api().readSettings();
-		} catch {
-			// Defaults stand; the form still works, it just starts empty.
+
+			const content =
+				(settings.analyzers.content as ContentSettings | undefined) ?? DEFAULT_CONTENT;
+			const seoquake =
+				(settings.analyzers.seoquake as SeoQuakeSettings | undefined) ?? DEFAULT_SEOQUAKE;
+			const oldseo = (settings.analyzers.oldseo as OldSeoSettings | undefined) ?? DEFAULT_OLDSEO;
+
+			grammarProvider = content.grammar.provider;
+			grammarEndpoint = content.grammar.endpoint ?? '';
+			ignoreWordsText = content.ignoreWords.join('\n');
+			chromePath = seoquake.chromePath ?? '';
+			extensionPath = seoquake.extensionPath ?? '';
+			maxPages = oldseo.maxPages;
+		} catch (e) {
+			// The real settings on disk could not be read — never let the form
+			// silently fall back to writing a defaults-shaped object over them.
+			loadFailed = true;
+			error = (e as Error).message;
+		} finally {
+			loading = false;
 		}
-
-		const content = (settings.analyzers.content as ContentSettings | undefined) ?? DEFAULT_CONTENT;
-		const seoquake =
-			(settings.analyzers.seoquake as SeoQuakeSettings | undefined) ?? DEFAULT_SEOQUAKE;
-		const oldseo = (settings.analyzers.oldseo as OldSeoSettings | undefined) ?? DEFAULT_OLDSEO;
-
-		grammarProvider = content.grammar.provider;
-		grammarEndpoint = content.grammar.endpoint ?? '';
-		ignoreWordsText = content.ignoreWords.join('\n');
-		chromePath = seoquake.chromePath ?? '';
-		extensionPath = seoquake.extensionPath ?? '';
-		maxPages = oldseo.maxPages;
-
-		loading = false;
 	});
 
 	async function save() {
+		if (loadFailed) return;
+
 		saving = true;
 		saved = '';
 		error = '';
@@ -66,10 +78,17 @@
 				.map((w) => w.trim())
 				.filter((w) => w.length > 0);
 
+			const trimmedEndpoint = grammarEndpoint.trim();
 			const grammar: ContentSettings['grammar'] =
-				grammarProvider === 'languagetool-custom'
-					? { provider: grammarProvider, endpoint: grammarEndpoint.trim() }
+				grammarProvider === 'languagetool-custom' && trimmedEndpoint.length > 0
+					? { provider: grammarProvider, endpoint: trimmedEndpoint }
 					: { provider: grammarProvider };
+
+			// A cleared field must save the documented default (10), never NaN.
+			const parsedMaxPages = Number(maxPages);
+			const maxPagesToSave = Number.isFinite(parsedMaxPages)
+				? Math.min(25, Math.max(0, Math.floor(parsedMaxPages)))
+				: 10;
 
 			const next: Settings = {
 				...settings,
@@ -81,7 +100,7 @@
 						extensionPath: extensionPath.trim() || null
 					} satisfies SeoQuakeSettings,
 					oldseo: {
-						maxPages: Math.max(0, Math.min(25, Math.floor(maxPages)))
+						maxPages: maxPagesToSave
 					} satisfies OldSeoSettings
 				}
 			};
@@ -184,7 +203,7 @@
 			{/if}
 
 			<div class="flex items-center gap-4 pt-1">
-				<button on:click={save} disabled={saving} class="btn btn-primary">
+				<button on:click={save} disabled={saving || loadFailed} class="btn btn-primary">
 					{saving ? 'Saving…' : 'Save'}
 				</button>
 				{#if saved}

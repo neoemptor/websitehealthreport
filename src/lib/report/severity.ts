@@ -485,14 +485,21 @@ function seoQuakeSeverity(d: SeoQuakeData): Severity {
 		};
 	}
 
-	const rank = d.semrushRank === null ? 'no data' : d.semrushRank.toLocaleString('en-AU');
-	const backlinks = d.backlinks === null ? 'no data' : d.backlinks.toLocaleString('en-AU');
-	const domains = d.linkingDomains === null ? 'no data' : d.linkingDomains.toLocaleString('en-AU');
+	const rankPart =
+		d.semrushRank === null ? null : `Semrush rank ${d.semrushRank.toLocaleString('en-AU')}`;
+	const backlinksPart =
+		d.backlinks === null || d.linkingDomains === null
+			? 'backlinks not reported'
+			: `${d.backlinks.toLocaleString('en-AU')} backlinks from ${d.linkingDomains.toLocaleString(
+					'en-AU'
+			  )} domains`;
+
+	const finding = [rankPart, backlinksPart].filter((p): p is string => p !== null).join('; ');
 
 	return {
 		word: 'Measured',
 		tone: 'ok',
-		finding: `Semrush rank ${rank}; ${backlinks} backlinks from ${domains} domains.`
+		finding: `${finding}.`
 	};
 }
 
@@ -507,13 +514,16 @@ function isContent(d: unknown): d is ContentData {
 			(m) => typeof m?.word === 'string' && isNumber(m?.count) && Array.isArray(m?.suggestions)
 		) &&
 		!!grammar &&
-		(grammar.status === 'ok' || grammar.status === 'unavailable' || grammar.status === 'failed')
+		((grammar.status === 'ok' && Array.isArray(grammar.findings)) ||
+			grammar.status === 'unavailable' ||
+			grammar.status === 'failed')
 	);
 }
 
 function contentSeverity(d: ContentData): Severity {
 	const misspellingCount = d.spelling.misspellings.length;
-	const grammarFindings = d.grammar.status === 'ok' ? d.grammar.findings.length : 0;
+	const grammarFindings =
+		d.grammar.status === 'ok' && Array.isArray(d.grammar.findings) ? d.grammar.findings.length : 0;
 	const grammarUnavailable = d.grammar.status === 'unavailable';
 
 	const parts: string[] = [];

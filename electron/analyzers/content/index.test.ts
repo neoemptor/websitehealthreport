@@ -113,6 +113,19 @@ describe('content analyze', () => {
 		expect(checkGrammar).not.toHaveBeenCalled();
 	});
 
+	it("never reports words drawn from the site's own hostname", async () => {
+		state.launch = async () =>
+			readyBrowser('Welcome to cjsgaragedoors, your local garage door expert.');
+
+		const data = await contentAnalyzer.analyze(
+			'https://www.cjsgaragedoors.com.au/',
+			{ ignoreWords: [], grammar: { provider: 'off' } },
+			new AbortController().signal
+		);
+
+		expect(data.spelling.misspellings.some((m) => m.word === 'cjsgaragedoors')).toBe(false);
+	});
+
 	it('is still ok overall when grammar fails', async () => {
 		state.launch = async () => readyBrowser('Some page text.');
 		const failed: GrammarState = { status: 'failed', error: 'boom' };

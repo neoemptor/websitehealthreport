@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { buildHandlers } from './handlers';
+import { ClaudeUnavailableError, ClaudeFailedError } from './discovery/claude-cli';
 
 let dir: string;
 
@@ -113,5 +114,104 @@ describe('buildHandlers', () => {
 			await expect(handlers.resumeRun(id)).rejects.toThrow(/Invalid run id/);
 			await expect(handlers.cancelRun(id)).rejects.toThrow(/Invalid run id/);
 		}
+	});
+});
+
+describe('discovery handlers', () => {
+	const input = { client: 'cjs.com.au', readSite: false, webSearch: false, hint: '' };
+	const base = () => ({
+		userDataDir: dir,
+		emitProgress: () => {},
+		logger: { info: () => {}, error: () => {} }
+	});
+
+	it('maps a good answer to ok', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => ({ suggestions: [{ domain: 'a.com.au', name: 'A', reason: 'r' }] })
+			}
+		});
+		const result = await handlers.suggestCompetitors(input);
+		expect(result).toEqual({
+			status: 'ok',
+			suggestions: [{ domain: 'a.com.au', name: 'A', reason: 'r' }]
+		});
+	});
+
+	it('maps unavailable, failed and empty client without throwing', async () => {
+		const unavailable = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					throw new ClaudeUnavailableError('Claude Code is not installed on this machine.');
+				}
+			}
+		});
+		expect(await unavailable.suggestCompetitors(input)).toEqual({
+			status: 'unavailable',
+			reason: 'Claude Code is not installed on this machine.'
+		});
+
+		const failed = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					throw new ClaudeFailedError('Claude Code stopped before it could answer.', 'raw');
+				}
+			}
+		});
+		expect(await failed.suggestCompetitors(input)).toEqual({
+			status: 'failed',
+			error: 'Claude Code stopped before it could answer.'
+		});
+
+		expect(await failed.suggestCompetitors({ ...input, client: '' })).toEqual({
+			status: 'failed',
+			error: 'Domain is empty.'
+		});
+	});
+
+	it('reports a non-Error throw by its own text', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					// eslint-disable-next-line @typescript-eslint/no-throw-literal
+					throw 'boom';
+				}
+			}
+		});
+		expect(await handlers.suggestCompetitors(input)).toEqual({ status: 'failed', error: 'boom' });
+	});
+
+	it('cancels the in-flight request, and a new request replaces the old one', async () => {
+		const seen: AbortSignal[] = [];
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: (opts) =>
+					new Promise((_, reject) => {
+						seen.push(opts.signal);
+						opts.signal.addEventListener('abort', () => reject(new Error('Aborted: cancelled')));
+					})
+			}
+		});
+		const first = handlers.suggestCompetitors(input);
+		await new Promise((r) => setTimeout(r, 5));
+		const second = handlers.suggestCompetitors(input);
+		await new Promise((r) => setTimeout(r, 5));
+		expect(seen[0].aborted).toBe(true);
+		expect(await first).toEqual({ status: 'cancelled' });
+		await handlers.cancelSuggest();
+		expect(await second).toEqual({ status: 'cancelled' });
+	});
+
+	it('preflight passes through the CLI probe', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: { findClaude: async () => ({ available: true, version: '2.1.237' }) }
+		});
+		expect(await handlers.discoveryPreflight()).toEqual({ available: true, version: '2.1.237' });
 	});
 });

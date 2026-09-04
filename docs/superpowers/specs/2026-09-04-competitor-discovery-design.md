@@ -227,3 +227,9 @@ operator changes a switch or leaves the hint field.
 
 Storing suggestions or reasons on the run; choosing the model in the UI;
 any use of an API key; discovery for anything other than competitors.
+
+Spike result, 4 September 2026: `claude -p --json-schema --allowedTools WebSearch --model sonnet`
+searched the web in print mode on the subscription login and returned schema-valid output in 33s.
+The Web search checkbox stays. End-to-end through the compiled handlers on the same day: preflight
+found Claude Code 2.1.237, a live request for cjsgaragedoors.com.au returned eight local competitors
+in 49s, and cancel returned `cancelled`.

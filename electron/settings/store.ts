@@ -1,15 +1,18 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { AnalyzerId } from '../../src/lib/shared/types';
+import { DEFAULT_DISCOVERY_SETTINGS, type DiscoverySettings } from '../../src/lib/shared/discovery';
 
 export type Settings = {
 	enabledAnalyzers: AnalyzerId[];
 	analyzers: Partial<Record<AnalyzerId, unknown>>;
+	discovery: DiscoverySettings;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
 	enabledAnalyzers: ['lighthouse', 'keywords'],
-	analyzers: {}
+	analyzers: {},
+	discovery: DEFAULT_DISCOVERY_SETTINGS
 };
 
 export class SettingsStore {

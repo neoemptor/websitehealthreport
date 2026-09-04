@@ -40,6 +40,12 @@ export function registerIpc(deps: {
 	ipcMain.handle('run:load', wrap('run:load', handlers.loadRun));
 	ipcMain.handle('settings:read', wrap('settings:read', handlers.readSettings));
 	ipcMain.handle('settings:write', wrap('settings:write', handlers.writeSettings));
+	ipcMain.handle('discovery:preflight', wrap('discovery:preflight', handlers.discoveryPreflight));
+	ipcMain.handle(
+		'discovery:competitors',
+		wrap('discovery:competitors', handlers.suggestCompetitors)
+	);
+	ipcMain.handle('discovery:cancel', wrap('discovery:cancel', handlers.cancelSuggest));
 
 	ipcMain.handle(
 		'pdf:export',

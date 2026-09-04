@@ -15,6 +15,15 @@
         "value": "26px",
         "createdAt": "2026-09-04T07:20:39.751Z",
         "reason": "documented: DESIGN.md Figure step, 26px on screen for the settled/total count"
+      },
+      {
+        "rule": "design-system-font-size",
+        "value": "16px",
+        "files": [
+          "electron/analyzers/oldseo/snapshot-script.test.ts"
+        ],
+        "createdAt": "2026-09-04T21:54:08.391Z",
+        "reason": "controller: a DOM stub inside a unit test, not UI"
       }
     ]
   }

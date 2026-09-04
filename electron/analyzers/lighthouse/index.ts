@@ -13,8 +13,11 @@ export type LighthouseSettings = { formFactor: 'mobile' | 'desktop' };
 export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 	id: 'lighthouse',
 	label: 'Lighthouse',
-	// CPU-bound: two at a time keeps the machine usable during a run.
-	concurrency: 'limited',
+	// Two Lighthouse instances launched together trip over each other's
+	// performance marks ("start lh:driver:navigate" / "lh:gather:getBenchmarkIndex"
+	// not set), failing intermittently. One at a time is reliable and still
+	// the slowest-but-bounded check.
+	concurrency: 'serial',
 	timeoutMs: 120_000,
 	defaultSettings: { formFactor: 'mobile' },
 

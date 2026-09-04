@@ -28,7 +28,7 @@
 		</thead>
 		<tbody>
 			{#each ranked as row}
-				<tr class="border-b border-rule/70 last:border-0">
+				<tr class="break-inside-avoid border-b border-rule/70 last:border-0">
 					<td class="py-1.5 pr-4 font-mono text-[12px] text-ink">{row.keyword}</td>
 					<td
 						class="py-1.5 text-right font-mono text-[12px] {row.count === 0
@@ -46,7 +46,7 @@
 	</table>
 
 	{#if unused.length > 0}
-		<p class="mt-2.5 text-[11.5px] leading-relaxed text-[#6B6659]">
+		<p class="mt-2.5 break-inside-avoid text-[11.5px] leading-relaxed text-[#6B6659]">
 			<span class="font-medium text-ink">
 				{unused.length}
 				{unused.length === 1

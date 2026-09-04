@@ -46,7 +46,9 @@
 	];
 </script>
 
-<div class="mt-3 grid grid-cols-4 gap-px border border-rule bg-rule">
+<!-- The score grid reads as one object; splitting it across a page would
+     divide a client's four headline numbers in half. -->
+<div class="mt-3 grid break-inside-avoid grid-cols-4 gap-px border border-rule bg-rule">
 	{#each scores as score}
 		{@const b = band(score.value)}
 		<div class="bg-paper px-3 py-3 text-center">
@@ -60,7 +62,7 @@
 <table class="mt-4 w-full border-collapse text-left">
 	<tbody>
 		{#each vitals as vital}
-			<tr class="border-b border-rule/70 last:border-0">
+			<tr class="break-inside-avoid border-b border-rule/70 last:border-0">
 				<td class="py-1.5 pr-4">
 					<span class="block text-[12px] text-ink">{vital.label}</span>
 					<span class="block text-[10.5px] text-[#6B6659]">{vital.note}</span>

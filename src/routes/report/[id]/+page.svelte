@@ -137,9 +137,18 @@
 				</p>
 			</header>
 
-			{#each run.domains as domain, i}
-				<section class="break-inside-avoid pt-8 {i > 0 ? 'print:break-before-page' : ''}">
-					<div class="flex items-baseline justify-between gap-6 border-b border-rule pb-2">
+			<!-- Domains flow continuously rather than one per page. A section is
+			     therefore free to split across a page boundary — deliberately: the
+			     alternative, break-inside-avoid on a section taller than a page,
+			     pushes the whole thing to the next page and leaves the gap this was
+			     meant to remove. What must not split is kept whole below. -->
+			{#each run.domains as domain}
+				<section class="pt-8">
+					<!-- break-after-avoid keeps a domain heading with at least the start
+					     of its content, so a name never strands at the foot of a page. -->
+					<div
+						class="flex items-baseline justify-between gap-6 break-inside-avoid break-after-avoid border-b border-rule pb-2"
+					>
 						<h2 class="font-serif text-[21px]">{host(domain.domain)}</h2>
 						<span class="font-mono text-[10px] uppercase tracking-[0.12em] text-[#6B6659]">
 							{domain.role}
@@ -149,7 +158,7 @@
 					<!-- Status rail: the shape of the result before any numbers. A reader
 					     flipping the PDF sees at a glance what was measured and what
 					     could not be. -->
-					<div class="mt-3 flex flex-wrap gap-x-6 gap-y-1.5">
+					<div class="mt-3 flex break-inside-avoid flex-wrap gap-x-6 gap-y-1.5">
 						{#each run.enabledAnalyzers as id}
 							{@const m = mark(domain.analyzers[id])}
 							<span class="chip {m.tone}" data-glyph={m.glyph}>
@@ -161,8 +170,10 @@
 
 					{#each run.enabledAnalyzers as id}
 						{@const result = domain.analyzers[id]}
-						<div class="mt-6 break-inside-avoid">
-							<h3 class="font-serif text-[15px] font-semibold">{analyzerName(id)}</h3>
+						<div class="mt-6">
+							<h3 class="break-after-avoid font-serif text-[15px] font-semibold">
+								{analyzerName(id)}
+							</h3>
 
 							{#if !result}
 								<p class="mt-1 text-[12px] text-[#6B6659]">Not run.</p>

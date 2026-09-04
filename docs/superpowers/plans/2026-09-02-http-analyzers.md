@@ -910,7 +910,7 @@ In `src/routes/+page.svelte`, extend `available`:
   ];
 ```
 
-- [ ] **Step 3: Create `src/lib/report/Unknown.svelte`**
+- [x] **Step 3: Create `src/lib/report/Unknown.svelte`** — ALREADY DONE. Pulled forward with the UI styling work; it exists and is styled for the report document. Skip this step.
 
 ```svelte
 <script lang="ts">
@@ -1050,7 +1050,10 @@ In `src/routes/report/[id]/+page.svelte`, replace the `<pre>` fallback:
 
   // Analyzers without a component yet fall back to JSON, so adding an
   // analyzer never breaks the report.
-  const components: Partial<Record<AnalyzerId, typeof Unknown>> = {
+  // ComponentType, not `typeof Unknown`: a component declaring a narrow data
+  // shape is not assignable where one accepting `unknown` is expected, and
+  // svelte-check fails on it. Import it with: import type { ComponentType } from 'svelte';
+  const components: Partial<Record<AnalyzerId, ComponentType>> = {
     wayback: Wayback,
     security: Security,
     aeo: Aeo

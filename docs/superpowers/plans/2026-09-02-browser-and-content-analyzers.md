@@ -999,7 +999,7 @@ export const ssr = false;
 </table>
 ```
 
-- [ ] **Step 5: Write `src/lib/report/Lighthouse.svelte`**
+- [x] **Step 5: Write `src/lib/report/Lighthouse.svelte`** — ALREADY DONE. Pulled forward with the UI styling work: scores are banded per Google thresholds and Core Web Vitals carry plain-English descriptions and pass/fail against stated targets. Skip this step.
 
 ```svelte
 <script lang="ts">
@@ -1028,7 +1028,7 @@ export const ssr = false;
 </p>
 ```
 
-- [ ] **Step 6: Write `src/lib/report/Keywords.svelte`**
+- [x] **Step 6: Write `src/lib/report/Keywords.svelte`** — ALREADY DONE. Pulled forward with the UI styling work, including surfacing keywords declared in the meta tag but absent from the page text. Skip this step.
 
 ```svelte
 <script lang="ts">
@@ -1054,7 +1054,8 @@ export const ssr = false;
 In `src/routes/report/[id]/+page.svelte`, extend the map:
 
 ```ts
-  const components: Partial<Record<AnalyzerId, typeof Unknown>> = {
+  // ComponentType, not `typeof Unknown` — see plan 2 Task 7.
+  const components: Partial<Record<AnalyzerId, ComponentType>> = {
     lighthouse: Lighthouse,
     keywords: Keywords,
     wayback: Wayback,

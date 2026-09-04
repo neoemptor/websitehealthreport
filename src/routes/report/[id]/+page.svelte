@@ -1,8 +1,24 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, type ComponentType } from 'svelte';
 	import { page } from '$app/stores';
 	import { api } from '$lib/api';
-	import type { Run, AnalyzerResult } from '$lib/shared/types';
+	import type { Run, AnalyzerResult, AnalyzerId } from '$lib/shared/types';
+	import Lighthouse from '$lib/report/Lighthouse.svelte';
+	import Keywords from '$lib/report/Keywords.svelte';
+	import Unknown from '$lib/report/Unknown.svelte';
+
+	// Analyzers without a component fall back to their raw values, so adding one
+	// can never break the report. The remaining seven arrive with their plans.
+	//
+	// ComponentType, not `typeof Unknown`: each component declares the shape it
+	// needs, and a component requiring a narrow shape is not assignable where one
+	// accepting `unknown` is expected. Analyzer data genuinely crosses IPC as
+	// `unknown`, so this map is the point where that is accepted — a malformed
+	// result renders empty rather than throwing.
+	const components: Partial<Record<AnalyzerId, ComponentType>> = {
+		lighthouse: Lighthouse,
+		keywords: Keywords
+	};
 
 	let run: Run | null = null;
 	let exporting = false;
@@ -161,15 +177,7 @@
 									{result.error}
 								</p>
 							{:else}
-								<!-- Readable per-analyzer rendering arrives with the analyzer
-								     components in a later plan. Until then the measured values
-								     are shown verbatim rather than summarised inaccurately. -->
-								<pre
-									class="mt-2 overflow-x-auto whitespace-pre-wrap border-l-2 border-rule bg-black/[0.03] px-3 py-2 font-mono text-[10.5px] leading-relaxed text-[#3A3730]">{JSON.stringify(
-										result.data,
-										null,
-										2
-									)}</pre>
+								<svelte:component this={components[id] ?? Unknown} data={result.data} />
 							{/if}
 						</div>
 					{/each}

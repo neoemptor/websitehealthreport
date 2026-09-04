@@ -11,6 +11,8 @@
 	import Aeo from '$lib/report/Aeo.svelte';
 	import SeoQuake from '$lib/report/SeoQuake.svelte';
 	import Content from '$lib/report/Content.svelte';
+	import TrafficOwned from '$lib/report/TrafficOwned.svelte';
+	import TrafficEstimated from '$lib/report/TrafficEstimated.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
 	import Summary from '$lib/report/Summary.svelte';
@@ -32,7 +34,9 @@
 		security: Security,
 		aeo: Aeo,
 		seoquake: SeoQuake,
-		content: Content
+		content: Content,
+		'traffic-owned': TrafficOwned,
+		'traffic-estimated': TrafficEstimated
 	};
 
 	let run: Run | null = null;

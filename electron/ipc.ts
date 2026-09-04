@@ -1,7 +1,18 @@
-import { ipcMain, type BrowserWindow } from 'electron';
+import {
+	BrowserWindow as ElectronBrowserWindow,
+	ipcMain,
+	safeStorage,
+	type BrowserWindow
+} from 'electron';
 import * as path from 'path';
 import { buildHandlers, type Logger } from './handlers';
+import { CredentialStore } from './credentials';
+import { normaliseDomain } from '../src/lib/shared/url';
 import { assertRunId } from './run/id';
+
+// Loopback redirect for the installed-app OAuth flow. Nothing listens on it:
+// the consent window is intercepted the moment it tries to navigate there.
+const GOOGLE_REDIRECT_URI = 'http://127.0.0.1:8412';
 
 export type { Logger };
 
@@ -15,8 +26,11 @@ export function registerIpc(deps: {
 	 *  export window needs a real HTTP origin rather than a file:// path. */
 	rendererBase: string;
 }): RegisteredIpc {
+	const credentials = new CredentialStore(deps.userDataDir, safeStorage);
+
 	const handlers = buildHandlers({
 		userDataDir: deps.userDataDir,
+		credentials,
 		logger: deps.logger,
 		emitProgress: (run) => deps.window.webContents.send('run:progress', run)
 	});
@@ -46,6 +60,106 @@ export function registerIpc(deps: {
 		wrap('discovery:competitors', handlers.suggestCompetitors)
 	);
 	ipcMain.handle('discovery:cancel', wrap('discovery:cancel', handlers.cancelSuggest));
+
+	ipcMain.handle('cred:set', wrap('cred:set', handlers.setCredential));
+	// Deliberately no cred:get. The renderer learns only that a credential exists.
+	ipcMain.handle('cred:has', wrap('cred:has', handlers.hasCredential));
+	ipcMain.handle('cred:remove', wrap('cred:remove', handlers.removeCredential));
+
+	ipcMain.handle('google:disconnect', wrap('google:disconnect', handlers.disconnectGoogle));
+
+	ipcMain.handle(
+		'google:authorise',
+		wrap('google:authorise', async (rawDomain: string) => {
+			const domain = normaliseDomain(rawDomain);
+			const { buildAuthUrl, createPkce, exchangeCode, generateState, refreshTokenKey, SCOPES } =
+				await import('./analyzers/traffic-owned/oauth');
+
+			const clientId = await credentials.get('google.clientId');
+			const clientSecret = await credentials.get('google.clientSecret');
+			if (!clientId || !clientSecret) {
+				throw new Error('Google has not been set up in Settings.');
+			}
+
+			const { verifier, challenge } = createPkce();
+			const state = generateState();
+			const authWindow = new ElectronBrowserWindow({
+				width: 600,
+				height: 800,
+				webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+			});
+			// Consent is the only thing this window is for: a link that tries to
+			// open a new window (Google's help and privacy links) must not spawn
+			// an uncontrolled browser window inside the app.
+			authWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+			try {
+				const code = await new Promise<string>((resolve, reject) => {
+					let settled = false;
+					const finish = (fn: () => void): void => {
+						if (settled) return;
+						settled = true;
+						fn();
+					};
+					const onNavigate = (event: { preventDefault(): void }, url: string): void => {
+						let target: URL;
+						try {
+							target = new URL(url);
+						} catch {
+							return;
+						}
+						if (target.origin !== GOOGLE_REDIRECT_URI) return;
+						event.preventDefault();
+						const params = target.searchParams;
+						const returned = params.get('code');
+						const returnedState = params.get('state');
+						finish(() => {
+							if (!returned) {
+								reject(new Error(params.get('error') ?? 'Sign-in was cancelled.'));
+							} else if (returnedState !== state) {
+								reject(new Error('Sign-in did not complete correctly.'));
+							} else {
+								resolve(returned);
+							}
+						});
+					};
+					// Google's loopback redirect can arrive as any of these events
+					// depending on how the consent page hands off, so all are
+					// watched, and the loopback navigation is prevented so no
+					// connection-refused page ever renders.
+					authWindow.webContents.on('will-redirect', onNavigate);
+					authWindow.webContents.on('will-navigate', onNavigate);
+					authWindow.webContents.on('did-navigate', (event, url) =>
+						onNavigate({ preventDefault: () => {} }, url)
+					);
+					authWindow.on('closed', () => finish(() => reject(new Error('Sign-in was cancelled.'))));
+
+					void authWindow.loadURL(
+						buildAuthUrl({
+							clientId,
+							redirectUri: GOOGLE_REDIRECT_URI,
+							scopes: SCOPES,
+							codeChallenge: challenge,
+							state
+						})
+					);
+				});
+
+				const { refreshToken } = await exchangeCode({
+					code,
+					clientId,
+					clientSecret,
+					redirectUri: GOOGLE_REDIRECT_URI,
+					codeVerifier: verifier
+				});
+
+				// The token never leaves the main process: this returns void.
+				await credentials.set(refreshTokenKey(domain), refreshToken);
+			} finally {
+				if (!authWindow.isDestroyed()) authWindow.destroy();
+			}
+		})
+	);
 
 	ipcMain.handle(
 		'pdf:export',

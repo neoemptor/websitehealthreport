@@ -9,6 +9,10 @@ import { securityAnalyzer } from './analyzers/security';
 import { aeoAnalyzer } from './analyzers/aeo';
 import { seoQuakeAnalyzer } from './analyzers/seoquake';
 import { contentAnalyzer } from './analyzers/content';
+import { createTrafficEstimatedAnalyzer } from './analyzers/traffic-estimated';
+import { createTrafficOwnedAnalyzer } from './analyzers/traffic-owned';
+import type { CredentialStore } from './credentials';
+import { refreshTokenKey } from './analyzers/traffic-owned/oauth';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -32,8 +36,23 @@ import { suggestCompetitors, type CompetitorDeps } from './discovery/competitors
 // hence no import of any kind from it, not even a type-only one.
 export type Logger = { info(m: string, d?: unknown): void; error(m: string, d?: unknown): void };
 
+// The only credentials the renderer may write. A refresh token is written
+// solely by the Google consent flow in the main process, so its key is
+// deliberately absent: a compromised renderer cannot plant one.
+const ALLOWED_CREDENTIAL_KEYS = new Set([
+	'semrush.apiKey',
+	'google.clientId',
+	'google.clientSecret'
+]);
+
+function assertCredentialKey(key: string): string {
+	if (!ALLOWED_CREDENTIAL_KEYS.has(key)) throw new Error('Unknown credential.');
+	return key;
+}
+
 export type HandlerDeps = {
 	userDataDir: string;
+	credentials: CredentialStore;
 	emitProgress: (run: Run) => void;
 	logger: Logger;
 	/** Test seams for competitor discovery; production uses the real modules. */
@@ -55,7 +74,9 @@ export function buildHandlers(deps: HandlerDeps) {
 		securityAnalyzer,
 		aeoAnalyzer,
 		seoQuakeAnalyzer,
-		contentAnalyzer
+		contentAnalyzer,
+		createTrafficEstimatedAnalyzer(deps.credentials),
+		createTrafficOwnedAnalyzer(deps.credentials)
 	]);
 	const storage = new RunStorage(deps.userDataDir);
 	const settingsStore = new SettingsStore(deps.userDataDir);
@@ -92,17 +113,46 @@ export function buildHandlers(deps: HandlerDeps) {
 			const settings = await settingsStore.read();
 
 			deps.logger.info('run:start', { client, competitors });
-			return orchestrator.start({
+			const run = await orchestrator.start({
 				client,
 				competitors,
 				enabledAnalyzers: input.enabledAnalyzers,
 				settings: settings.analyzers
 			});
+			return run;
 		},
 
 		async resumeRun(id: string): Promise<Run> {
+			const runId = assertRunId(id);
 			const settings = await settingsStore.read();
-			return orchestrator.resume(assertRunId(id), settings.analyzers);
+			const run = await orchestrator.resume(runId, settings.analyzers);
+			return run;
+		},
+
+		async setCredential(key: string, value: string): Promise<void> {
+			await deps.credentials.set(assertCredentialKey(key), value);
+		},
+
+		// Deliberately no getCredential: the renderer learns only that a
+		// credential exists, never its value.
+		async hasCredential(key: string): Promise<boolean> {
+			return deps.credentials.has(assertCredentialKey(key));
+		},
+
+		async removeCredential(key: string): Promise<void> {
+			await deps.credentials.remove(assertCredentialKey(key));
+		},
+
+		/**
+		 * Forgets a client site's Google connection. The refresh token is the
+		 * only thing that connection consists of, so removing it is the whole
+		 * disconnect — the next run for this site reports "not connected"
+		 * rather than reading stale credentials.
+		 */
+		async disconnectGoogle(rawDomain: string): Promise<void> {
+			const domain = normaliseDomain(rawDomain);
+			deps.logger.info('google:disconnect', { domain });
+			await deps.credentials.remove(refreshTokenKey(domain));
 		},
 
 		async cancelRun(id: string): Promise<void> {

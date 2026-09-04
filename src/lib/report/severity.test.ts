@@ -650,3 +650,182 @@ describe('severityOf — content', () => {
 		expect(s.finding).toMatch(/1 misspelling/);
 	});
 });
+
+describe('severityOf — traffic-estimated', () => {
+	const ok = (overrides: {
+		organicKeywords?: number | null;
+		organicTraffic?: number | null;
+		organicCost?: number | null;
+		adwordsKeywords?: number | null;
+		nothingFound?: boolean;
+	}) => ({
+		status: 'ok' as const,
+		data: {
+			organicKeywords: null,
+			organicTraffic: null,
+			organicCost: null,
+			adwordsKeywords: null,
+			nothingFound: false,
+			...overrides
+		}
+	});
+
+	it('is No estimate when nothingFound is true', () => {
+		const s = severityOf('traffic-estimated', ok({ nothingFound: true }));
+		expect(s).toEqual({
+			word: 'No estimate',
+			tone: 'na',
+			finding: 'Semrush has no estimate for this site.'
+		});
+	});
+
+	it('is No estimate when every figure is null even without nothingFound', () => {
+		const s = severityOf('traffic-estimated', ok({}));
+		expect(s).toEqual({
+			word: 'No estimate',
+			tone: 'na',
+			finding: 'Semrush has no estimate for this site.'
+		});
+	});
+
+	it('is Estimated with visits and keyword count when figures are present', () => {
+		const s = severityOf('traffic-estimated', ok({ organicTraffic: 12345, organicKeywords: 678 }));
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
+		expect(s.finding).toBe('About 12,345 visits a month (estimate), ranking for 678 keywords.');
+	});
+
+	it('uses singular keyword for a count of one', () => {
+		const s = severityOf('traffic-estimated', ok({ organicTraffic: 10, organicKeywords: 1 }));
+		expect(s.finding).toBe('About 10 visits a month (estimate), ranking for 1 keyword.');
+	});
+
+	it('omits the visits clause when organicTraffic is null', () => {
+		const s = severityOf('traffic-estimated', ok({ organicKeywords: 678 }));
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
+		expect(s.finding).toBe('Ranking for 678 keywords (estimate).');
+		expect(s.finding).not.toMatch(/0 visits/);
+	});
+
+	it('omits the keywords clause when organicKeywords is null', () => {
+		const s = severityOf('traffic-estimated', ok({ organicTraffic: 12345 }));
+		expect(s).toMatchObject({ word: 'Estimated', tone: 'ok' });
+		expect(s.finding).toBe('About 12,345 visits a month (estimate).');
+	});
+
+	it('never prints "About 0 visits" for a null organicTraffic', () => {
+		const s = severityOf('traffic-estimated', ok({ organicKeywords: 1 }));
+		expect(s.finding).not.toMatch(/About 0 visits/);
+		expect(s.finding).toBe('Ranking for 1 keyword (estimate).');
+	});
+
+	it('falls back to Measured when the data is not traffic-estimated-shaped', () => {
+		expect(severityOf('traffic-estimated', { status: 'ok', data: { nope: true } })).toMatchObject({
+			word: 'Measured',
+			tone: 'na',
+			finding: 'See the readings below.'
+		});
+	});
+});
+
+describe('severityOf — traffic-owned', () => {
+	const range = { start: '2026-06-01', end: '2026-08-30' };
+	const gsc = (clicks = 100, impressions = 1000) => ({
+		status: 'ok' as const,
+		data: {
+			totals: { clicks, impressions, ctr: clicks / impressions, position: 5.2 },
+			topQueries: []
+		}
+	});
+	const ga4 = (sessions = 500, users = 400) => ({
+		status: 'ok' as const,
+		data: { sessions, users, engagementRate: 0.6 }
+	});
+	const unavailable = (reason: string) => ({ status: 'unavailable' as const, reason });
+
+	it('is Measured when both Search Console and GA4 are ok', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: gsc(1234, 56789), ga4: ga4(4321), range }
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+		expect(s.finding).toBe(
+			'1,234 clicks from 56,789 impressions in the last 90 days; 4,321 GA4 sessions.'
+		);
+	});
+
+	it('is Measured when Search Console is ok but GA4 is not connected', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: gsc(10, 100), ga4: unavailable('No GA4 property id is set.'), range }
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+		expect(s.finding).toBe(
+			'10 clicks from 100 impressions in the last 90 days. GA4 is not connected.'
+		);
+	});
+
+	it('is Measured when GA4 is ok but Search Console is not connected', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: {
+				searchConsole: unavailable('The connected Google account does not have access.'),
+				ga4: ga4(999),
+				range
+			}
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+		expect(s.finding).toBe(
+			'999 GA4 sessions in the last 90 days; Search Console is not connected.'
+		);
+	});
+
+	it('is Not connected when both sources are unavailable, using the Search Console reason', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: {
+				searchConsole: unavailable('Google has not been set up in Settings.'),
+				ga4: unavailable('No GA4 property id is set for this site in Settings.'),
+				range
+			}
+		});
+		expect(s).toEqual({
+			word: 'Not connected',
+			tone: 'na',
+			finding: 'Google has not been set up in Settings.'
+		});
+	});
+
+	it('names the client-only rule when a competitor cell is unavailable', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'unavailable',
+			reason:
+				"Owned traffic is only available for the client's own site, with its owner's permission."
+		});
+		expect(s).toEqual({
+			word: 'Client only',
+			tone: 'na',
+			finding:
+				"Measured traffic is read only for the client site, with its owner's permission; competitors are never read this way."
+		});
+	});
+
+	it('passes through any other unavailable reason as Not connected', () => {
+		const s = severityOf('traffic-owned', {
+			status: 'unavailable',
+			reason: 'Google has not been set up in Settings.'
+		});
+		expect(s).toEqual({
+			word: 'Not connected',
+			tone: 'na',
+			finding: 'Google has not been set up in Settings.'
+		});
+	});
+
+	it('falls back to Measured when the data is not traffic-owned-shaped', () => {
+		expect(severityOf('traffic-owned', { status: 'ok', data: { nope: true } })).toMatchObject({
+			word: 'Measured',
+			tone: 'na',
+			finding: 'See the readings below.'
+		});
+	});
+});

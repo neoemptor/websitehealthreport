@@ -132,7 +132,14 @@ export class Orchestrator {
 				if (domain.analyzers[id]?.status === 'ok') continue;
 
 				const analyzer = this.registry.get(id);
-				const analyzerSettings = settings[id] ?? analyzer.defaultSettings;
+				// Every analyzer is told which site this run belongs to. An
+				// analyzer that only reads the client's own data (measured
+				// traffic) decides that from the run it is part of, rather than
+				// from any process-wide notion of who the client currently is.
+				const analyzerSettings = {
+					...((settings[id] ?? analyzer.defaultSettings) as Record<string, unknown>),
+					clientUrl: run.client
+				};
 
 				tasks.push({
 					// Keyed by row index, not by domain name: two rows can hold

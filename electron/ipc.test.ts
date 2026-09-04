@@ -3,16 +3,29 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { buildHandlers } from './handlers';
+import { CredentialStore, type CryptoBackend } from './credentials';
 import { ClaudeUnavailableError, ClaudeFailedError } from './discovery/claude-cli';
 
 let dir: string;
+
+// The real safeStorage is unavailable outside Electron; a reversible stand-in
+// keeps the store's read/write path honest without pretending to encrypt.
+const fakeCrypto: CryptoBackend = {
+	isEncryptionAvailable: () => true,
+	encryptString: (value) => Buffer.from(`enc:${value}`, 'utf-8'),
+	decryptString: (value) => value.toString('utf-8').replace(/^enc:/, '')
+};
+
+const credentials = (): CredentialStore => new CredentialStore(dir, fakeCrypto);
 
 beforeEach(async () => {
 	dir = await fs.mkdtemp(path.join(os.tmpdir(), 'whr-ipc-'));
 });
 
 afterEach(async () => {
-	await fs.rm(dir, { recursive: true, force: true });
+	// maxRetries/retryDelay absorb the odd ENOTEMPTY/EBUSY from a file handle
+	// Windows hasn't released yet (e.g. right after a background run settles).
+	await fs.rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 });
 
 describe('buildHandlers', () => {
@@ -20,7 +33,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -38,7 +52,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		await expect(
@@ -50,7 +65,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -66,7 +82,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -89,7 +106,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -106,7 +124,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		for (const id of ['../../etc/passwd', 'run', '']) {
@@ -122,7 +141,8 @@ describe('discovery handlers', () => {
 	const base = () => ({
 		userDataDir: dir,
 		emitProgress: () => {},
-		logger: { info: () => {}, error: () => {} }
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
 	});
 
 	it('maps a good answer to ok', async () => {
@@ -213,5 +233,114 @@ describe('discovery handlers', () => {
 			discovery: { findClaude: async () => ({ available: true, version: '2.1.237' }) }
 		});
 		expect(await handlers.discoveryPreflight()).toEqual({ available: true, version: '2.1.237' });
+	});
+});
+
+describe('credential handlers', () => {
+	const base = () => ({
+		userDataDir: dir,
+		emitProgress: () => {},
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
+	});
+
+	it('saves, reports and removes an allowed credential without ever returning it', async () => {
+		const handlers = buildHandlers(base());
+
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(false);
+		await handlers.setCredential('semrush.apiKey', 'secret-key');
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(true);
+
+		// There is deliberately no getter: the renderer learns only that a
+		// credential exists.
+		expect('getCredential' in handlers).toBe(false);
+
+		await handlers.removeCredential('semrush.apiKey');
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(false);
+	});
+
+	it('accepts the Google client id and secret', async () => {
+		const handlers = buildHandlers(base());
+		await handlers.setCredential('google.clientId', 'id');
+		await handlers.setCredential('google.clientSecret', 'secret');
+		expect(await handlers.hasCredential('google.clientId')).toBe(true);
+		expect(await handlers.hasCredential('google.clientSecret')).toBe(true);
+	});
+
+	it('rejects any key outside the allowed list', async () => {
+		const handlers = buildHandlers(base());
+
+		// A refresh token is written only by the consent flow, never by the
+		// renderer, so its key is not settable here either.
+		for (const key of ['google.refresh.example.com', 'semrush', '__proto__', '']) {
+			await expect(handlers.setCredential(key, 'x')).rejects.toThrow('Unknown credential.');
+			await expect(handlers.hasCredential(key)).rejects.toThrow('Unknown credential.');
+			await expect(handlers.removeCredential(key)).rejects.toThrow('Unknown credential.');
+		}
+	});
+});
+
+describe('client identity during a run', () => {
+	const base = () => ({
+		userDataDir: dir,
+		emitProgress: () => {},
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
+	});
+
+	// Which row is the client is decided from the run itself, so the proof is
+	// in the run's own stored results: the competitor's measured-traffic cell
+	// carries the client-only reason, and the client's does not.
+	it('gives a competitor the client-only cell and the client a different one', async () => {
+		const store = credentials();
+		await store.set('google.clientId', 'client-id');
+		await store.set('google.clientSecret', 'client-secret');
+
+		const handlers = buildHandlers({ ...base(), credentials: store });
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: ['rival.com'],
+			enabledAnalyzers: ['traffic-owned']
+		});
+		await handlers.settled(run.id);
+
+		const stored = await handlers.loadRun(run.id);
+		const clientOnly = /only available for the client's own site/;
+
+		const competitor = stored.domains.find((d) => d.role === 'competitor');
+		expect(competitor?.analyzers['traffic-owned']).toMatchObject({ status: 'unavailable' });
+		expect((competitor?.analyzers['traffic-owned'] as { reason: string }).reason).toMatch(
+			clientOnly
+		);
+
+		// The client is never refused for being a competitor. With no Google
+		// account connected it still cannot be measured, but for a different
+		// reason — the connection, not the identity.
+		const client = stored.domains.find((d) => d.role === 'client');
+		const clientCell = client?.analyzers['traffic-owned'] as
+			| { status: string; reason?: string; error?: string }
+			| undefined;
+		expect(clientCell?.reason ?? clientCell?.error ?? '').not.toMatch(clientOnly);
+	});
+});
+
+describe('disconnectGoogle', () => {
+	it("removes only that site's refresh token", async () => {
+		const store = credentials();
+		await store.set('google.refresh.example.com', 'token-a');
+		await store.set('google.refresh.rival.com', 'token-b');
+
+		const handlers = buildHandlers({
+			userDataDir: dir,
+			emitProgress: () => {},
+			logger: { info: () => {}, error: () => {} },
+			credentials: store
+		});
+
+		// A bare domain and a www spelling both resolve to the same key.
+		await handlers.disconnectGoogle('www.example.com');
+
+		expect(await store.has('google.refresh.example.com')).toBe(false);
+		expect(await store.has('google.refresh.rival.com')).toBe(true);
 	});
 });

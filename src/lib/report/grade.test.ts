@@ -108,6 +108,37 @@ describe('gradeOf', () => {
 		expect(g).toEqual({ letter: '—', measured: 0, total: 1, ratio: 0 });
 	});
 
+	it('does not let the client-only measured-traffic check lift the grade', () => {
+		const trafficOwned: AnalyzerResult = {
+			status: 'ok',
+			data: {
+				searchConsole: {
+					status: 'ok',
+					data: {
+						totals: { clicks: 100, impressions: 1000, ctr: 0.1, position: 5 },
+						topQueries: []
+					}
+				},
+				ga4: { status: 'ok', data: { sessions: 500, users: 400, engagementRate: 0.6 } },
+				range: { start: '2026-06-01', end: '2026-08-30' }
+			}
+		};
+		// Only the client can ever have this reading, so it must stay out of the
+		// ratio entirely: a client with a Poor Lighthouse is still D, and its
+		// score is exactly what it would be with no measured-traffic cell at all.
+		const g = gradeOf(
+			domain({ lighthouse: lh(10), keywords: kw(0), 'traffic-owned': trafficOwned }),
+			['lighthouse', 'keywords', 'traffic-owned']
+		);
+		expect(g).toMatchObject({ letter: 'D', measured: 2, ratio: 0.5 });
+
+		const withoutTraffic = gradeOf(domain({ lighthouse: lh(10), keywords: kw(0) }), [
+			'lighthouse',
+			'keywords'
+		]);
+		expect(g.ratio).toBe(withoutTraffic.ratio);
+	});
+
 	it('treats a keywords "nothing declared" as neutral, not a fault', () => {
 		const g = gradeOf(
 			domain({ lighthouse: lh(95), keywords: { status: 'ok', data: { keywords: [] } } }),

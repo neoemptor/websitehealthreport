@@ -1,6 +1,12 @@
 import type { Analyzer } from '../types';
 import { once, rejectOnAbort } from '../abort';
+import { importEsm } from '../../esm';
 import { parseLighthouse } from './parse';
+
+// Both packages are ESM-only; see electron/esm.ts for why a plain
+// `await import()` cannot be used from this CommonJS build.
+type ChromeLauncher = typeof import('chrome-launcher');
+type Lighthouse = typeof import('lighthouse');
 
 export type LighthouseSettings = { formFactor: 'mobile' | 'desktop' };
 
@@ -14,7 +20,7 @@ export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 
 	async preflight() {
 		try {
-			const { Launcher } = await import('chrome-launcher');
+			const { Launcher } = await importEsm<ChromeLauncher>('chrome-launcher');
 			const installs = Launcher.getInstallations();
 			return installs.length > 0
 				? { available: true }
@@ -25,8 +31,8 @@ export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 	},
 
 	async analyze(domain, settings, signal) {
-		const { launch } = await import('chrome-launcher');
-		const lighthouse = (await import('lighthouse')).default;
+		const { launch } = await importEsm<ChromeLauncher>('chrome-launcher');
+		const lighthouse = (await importEsm<Lighthouse>('lighthouse')).default;
 
 		if (signal.aborted) throw new Error('Cancelled before Chrome was launched.');
 

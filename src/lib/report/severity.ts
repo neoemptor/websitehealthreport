@@ -114,10 +114,25 @@ function keywordsSeverity(d: KeywordsData): Severity {
 
 export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): Severity {
 	if (!result) return { word: 'Not run', tone: 'na', finding: 'This check was not run.' };
+
+	// A reason or error is written for the operator — a module path, a Chrome
+	// install hint, a network code — and the run screen shows it to them. The
+	// client's document says only what a client can act on: whether the site
+	// was measured, and that the gap is ours, not theirs.
 	if (result.status === 'unavailable')
-		return { word: 'Not measured', tone: 'na', finding: result.reason };
+		return {
+			word: 'Not measured',
+			tone: 'na',
+			finding:
+				'This check could not run on the computer that produced the report, so the site was not measured for it.'
+		};
 	if (result.status === 'failed')
-		return { word: 'Check failed', tone: 'fail', finding: result.error };
+		return {
+			word: 'Check failed',
+			tone: 'fail',
+			finding:
+				'The check started but could not complete for this site. It is worth running again before drawing a conclusion.'
+		};
 
 	if (id === 'lighthouse' && isLighthouse(result.data)) return lighthouseSeverity(result.data);
 	if (id === 'keywords' && isKeywords(result.data)) return keywordsSeverity(result.data);

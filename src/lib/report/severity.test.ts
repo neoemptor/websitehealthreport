@@ -19,25 +19,23 @@ describe('severityOf — states', () => {
 		expect(severityOf('lighthouse', undefined)).toMatchObject({ word: 'Not run', tone: 'na' });
 	});
 
-	it('keeps unavailable distinct from failed, carrying the reason', () => {
+	it('keeps unavailable distinct from failed, in plain language', () => {
+		// The operator's reason is for the run screen; a client's document
+		// never prints a module path or an install hint.
 		const s = severityOf('keywords', {
 			status: 'unavailable',
-			reason: 'Chromium is not installed.'
+			reason: 'require() of ES Module chrome-launcher not supported'
 		});
-		expect(s).toMatchObject({
-			word: 'Not measured',
-			tone: 'na',
-			finding: 'Chromium is not installed.'
-		});
+		expect(s).toMatchObject({ word: 'Not measured', tone: 'na' });
+		expect(s.finding).not.toContain('require');
+		expect(s.finding).toMatch(/could not run/);
 	});
 
-	it('names a failed check with its error', () => {
+	it('names a failed check without printing its error code', () => {
 		const s = severityOf('lighthouse', { status: 'failed', error: 'net::ERR_NAME_NOT_RESOLVED' });
-		expect(s).toMatchObject({
-			word: 'Check failed',
-			tone: 'fail',
-			finding: 'net::ERR_NAME_NOT_RESOLVED'
-		});
+		expect(s).toMatchObject({ word: 'Check failed', tone: 'fail' });
+		expect(s.finding).not.toContain('ERR_');
+		expect(s.finding).toMatch(/could not complete/);
 	});
 });
 

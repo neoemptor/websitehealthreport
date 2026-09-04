@@ -6,17 +6,25 @@ const state = vi.hoisted(() => ({
 	runLighthouse: async (): Promise<unknown> => ({ lhr: {} })
 }));
 
-vi.mock('chrome-launcher', () => ({
-	launch: async () => ({
-		port: (state.launches++, 9222),
-		kill: async () => {
-			state.kills++;
-		}
-	}),
-	Launcher: { getInstallations: () => ['/usr/bin/chrome'] }
+// The analyzer loads both ESM-only packages through importEsm (see
+// electron/esm.ts), which vitest's module mocking cannot intercept, so the
+// loader itself is mocked instead of the packages.
+vi.mock('../../esm', () => ({
+	importEsm: async (specifier: string) => {
+		if (specifier === 'chrome-launcher')
+			return {
+				launch: async () => ({
+					port: (state.launches++, 9222),
+					kill: async () => {
+						state.kills++;
+					}
+				}),
+				Launcher: { getInstallations: () => ['/usr/bin/chrome'] }
+			};
+		if (specifier === 'lighthouse') return { default: () => state.runLighthouse() };
+		throw new Error('unexpected import ' + specifier);
+	}
 }));
-
-vi.mock('lighthouse', () => ({ default: () => state.runLighthouse() }));
 
 const { lighthouseAnalyzer } = await import('./index');
 

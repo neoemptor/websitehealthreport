@@ -7,12 +7,8 @@
 	$: ranked = [...data.keywords].sort((a, b) => b.count - a.count);
 </script>
 
-{#if data.keywords.length === 0}
-	<p class="mt-1 text-[12px] text-dark-500">
-		<span class="font-medium text-dark-700">No keywords declared.</span>
-		The page has no meta keywords tag, so there is nothing to compare against its text.
-	</p>
-{:else}
+<!-- No keywords: the severity finding above already says so; nothing to add. -->
+{#if data.keywords.length > 0}
 	<!-- A short list is kept whole: a four-row table broken two rows either
 	     side of a page reads as an error. A long one may still run over a
 	     page — rows never split mid-row and Chromium repeats the header. -->

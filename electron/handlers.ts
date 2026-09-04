@@ -9,6 +9,9 @@ import { securityAnalyzer } from './analyzers/security';
 import { aeoAnalyzer } from './analyzers/aeo';
 import { seoQuakeAnalyzer } from './analyzers/seoquake';
 import { contentAnalyzer } from './analyzers/content';
+import { createTrafficEstimatedAnalyzer } from './analyzers/traffic-estimated';
+import { createTrafficOwnedAnalyzer } from './analyzers/traffic-owned';
+import type { CredentialStore } from './credentials';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -32,8 +35,23 @@ import { suggestCompetitors, type CompetitorDeps } from './discovery/competitors
 // hence no import of any kind from it, not even a type-only one.
 export type Logger = { info(m: string, d?: unknown): void; error(m: string, d?: unknown): void };
 
+// The only credentials the renderer may write. A refresh token is written
+// solely by the Google consent flow in the main process, so its key is
+// deliberately absent: a compromised renderer cannot plant one.
+const ALLOWED_CREDENTIAL_KEYS = new Set([
+	'semrush.apiKey',
+	'google.clientId',
+	'google.clientSecret'
+]);
+
+function assertCredentialKey(key: string): string {
+	if (!ALLOWED_CREDENTIAL_KEYS.has(key)) throw new Error('Unknown credential.');
+	return key;
+}
+
 export type HandlerDeps = {
 	userDataDir: string;
+	credentials: CredentialStore;
 	emitProgress: (run: Run) => void;
 	logger: Logger;
 	/** Test seams for competitor discovery; production uses the real modules. */
@@ -47,6 +65,13 @@ export type StartRunInput = {
 };
 
 export function buildHandlers(deps: HandlerDeps) {
+	// Owned traffic is read only for the site whose owner connected their
+	// Google account, so the analyzer needs to know which domain in a run is
+	// the client. The set is keyed by normalised client URL and holds only the
+	// runs currently executing.
+	const clientsInFlight = new Set<string>();
+	const isClient = (domain: string): boolean => clientsInFlight.has(domain);
+
 	const registry = createRegistry([
 		lighthouseAnalyzer,
 		keywordsAnalyzer,
@@ -55,7 +80,9 @@ export function buildHandlers(deps: HandlerDeps) {
 		securityAnalyzer,
 		aeoAnalyzer,
 		seoQuakeAnalyzer,
-		contentAnalyzer
+		contentAnalyzer,
+		createTrafficEstimatedAnalyzer(deps.credentials),
+		createTrafficOwnedAnalyzer(deps.credentials, isClient)
 	]);
 	const storage = new RunStorage(deps.userDataDir);
 	const settingsStore = new SettingsStore(deps.userDataDir);
@@ -68,6 +95,15 @@ export function buildHandlers(deps: HandlerDeps) {
 		timeoutMs: deps.discovery?.timeoutMs
 	};
 	const probeClaude = deps.discovery?.findClaude ?? findClaude;
+
+	// Fire-and-forget: startRun must return as soon as the run exists, so the
+	// client is forgotten on a later turn rather than blocking the caller.
+	const forgetClientWhenSettled = (id: string, client: string): void => {
+		void orchestrator
+			.settled(id)
+			.catch(() => undefined)
+			.finally(() => clientsInFlight.delete(client));
+	};
 
 	// One discovery at a time: a second click replaces the first, and the
 	// replaced request reports cancelled rather than racing to the panel.
@@ -92,17 +128,47 @@ export function buildHandlers(deps: HandlerDeps) {
 			const settings = await settingsStore.read();
 
 			deps.logger.info('run:start', { client, competitors });
-			return orchestrator.start({
+			clientsInFlight.add(client);
+			const run = await orchestrator.start({
 				client,
 				competitors,
 				enabledAnalyzers: input.enabledAnalyzers,
 				settings: settings.analyzers
 			});
+			forgetClientWhenSettled(run.id, client);
+			return run;
 		},
 
 		async resumeRun(id: string): Promise<Run> {
+			const runId = assertRunId(id);
 			const settings = await settingsStore.read();
-			return orchestrator.resume(assertRunId(id), settings.analyzers);
+			// The client is only known from the stored run, so it is read before
+			// the resume rather than passed in.
+			const existing = await storage.load(runId);
+			clientsInFlight.add(existing.client);
+			const run = await orchestrator.resume(runId, settings.analyzers);
+			forgetClientWhenSettled(run.id, existing.client);
+			return run;
+		},
+
+		/**
+		 * Not exposed over IPC. The registry closes over this, and tests assert
+		 * that a run's client is a client for the life of the run.
+		 */
+		isClient,
+
+		async setCredential(key: string, value: string): Promise<void> {
+			await deps.credentials.set(assertCredentialKey(key), value);
+		},
+
+		// Deliberately no getCredential: the renderer learns only that a
+		// credential exists, never its value.
+		async hasCredential(key: string): Promise<boolean> {
+			return deps.credentials.has(assertCredentialKey(key));
+		},
+
+		async removeCredential(key: string): Promise<void> {
+			await deps.credentials.remove(assertCredentialKey(key));
 		},
 
 		async cancelRun(id: string): Promise<void> {

@@ -24,6 +24,10 @@ export type WhrApi = {
 	discoveryPreflight(): Promise<DiscoveryPreflight>;
 	suggestCompetitors(input: DiscoveryInput): Promise<DiscoveryResult>;
 	cancelSuggest(): Promise<void>;
+	setCredential(key: string, value: string): Promise<void>;
+	hasCredential(key: string): Promise<boolean>;
+	removeCredential(key: string): Promise<void>;
+	authoriseGoogle(domain: string): Promise<void>;
 };
 
 const api: WhrApi = {
@@ -42,7 +46,11 @@ const api: WhrApi = {
 	},
 	discoveryPreflight: () => ipcRenderer.invoke('discovery:preflight'),
 	suggestCompetitors: (input) => ipcRenderer.invoke('discovery:competitors', input),
-	cancelSuggest: () => ipcRenderer.invoke('discovery:cancel')
+	cancelSuggest: () => ipcRenderer.invoke('discovery:cancel'),
+	setCredential: (key, value) => ipcRenderer.invoke('cred:set', key, value),
+	hasCredential: (key) => ipcRenderer.invoke('cred:has', key),
+	removeCredential: (key) => ipcRenderer.invoke('cred:remove', key),
+	authoriseGoogle: (domain) => ipcRenderer.invoke('google:authorise', domain)
 };
 
 contextBridge.exposeInMainWorld('api', api);

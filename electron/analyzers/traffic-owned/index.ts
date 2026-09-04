@@ -6,7 +6,8 @@ import { fetchSearchAnalytics, type GscData } from './gsc';
 import { fetchGa4, type Ga4Data } from './ga4';
 
 export type TrafficOwnedSettings = {
-	ga4PropertyId: string | null;
+	/** GA4 property id per site, keyed by hostname with no leading www. */
+	ga4PropertyIds: Record<string, string>;
 	days: number;
 };
 
@@ -26,6 +27,12 @@ function dateRange(days: number, now: Date = new Date()): DateRange {
 	const start = new Date(end.getTime() - days * 86_400_000);
 	const iso = (d: Date): string => d.toISOString().slice(0, 10);
 	return { startDate: iso(start), endDate: iso(end) };
+}
+
+// Settings are keyed the same way refresh tokens are, so one client site has
+// one key everywhere.
+function hostOf(domain: string): string {
+	return new URL(domain).hostname.replace(/^www\./, '');
 }
 
 const UNAVAILABLE_PREFIX = /^UNAVAILABLE:\s*/;
@@ -71,7 +78,7 @@ export function createTrafficOwnedAnalyzer(
 		label: 'Traffic (owned)',
 		concurrency: 'parallel',
 		timeoutMs: 60_000,
-		defaultSettings: { ga4PropertyId: null, days: 90 },
+		defaultSettings: { ga4PropertyIds: {}, days: 90 },
 
 		async preflight() {
 			const hasClientId = await credentials.has(GOOGLE_CLIENT_ID_KEY);
@@ -96,6 +103,7 @@ export function createTrafficOwnedAnalyzer(
 				throw new Error('UNAVAILABLE: Google has not been set up in Settings.');
 			}
 
+			const propertyId = settings.ga4PropertyIds?.[hostOf(domain)] ?? null;
 			const range = dateRange(settings.days, now());
 
 			// If the connection itself is the problem (not connected, or expired),
@@ -125,7 +133,7 @@ export function createTrafficOwnedAnalyzer(
 			}
 
 			let ga4: SourceResult<Ga4Data>;
-			if (!settings.ga4PropertyId) {
+			if (!propertyId) {
 				ga4 = {
 					status: 'unavailable',
 					reason: 'No GA4 property id is set for this site in Settings.'
@@ -134,7 +142,7 @@ export function createTrafficOwnedAnalyzer(
 				try {
 					ga4 = {
 						status: 'ok',
-						data: await fetchGa4(settings.ga4PropertyId, token, range, signal)
+						data: await fetchGa4(propertyId, token, range, signal)
 					};
 				} catch (error) {
 					ga4 = {

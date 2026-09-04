@@ -3,9 +3,20 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import { buildHandlers } from './handlers';
+import { CredentialStore, type CryptoBackend } from './credentials';
 import { ClaudeUnavailableError, ClaudeFailedError } from './discovery/claude-cli';
 
 let dir: string;
+
+// The real safeStorage is unavailable outside Electron; a reversible stand-in
+// keeps the store's read/write path honest without pretending to encrypt.
+const fakeCrypto: CryptoBackend = {
+	isEncryptionAvailable: () => true,
+	encryptString: (value) => Buffer.from(`enc:${value}`, 'utf-8'),
+	decryptString: (value) => value.toString('utf-8').replace(/^enc:/, '')
+};
+
+const credentials = (): CredentialStore => new CredentialStore(dir, fakeCrypto);
 
 beforeEach(async () => {
 	dir = await fs.mkdtemp(path.join(os.tmpdir(), 'whr-ipc-'));
@@ -20,7 +31,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -38,7 +50,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		await expect(
@@ -50,7 +63,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -66,7 +80,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -89,7 +104,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		const run = await handlers.startRun({
@@ -106,7 +122,8 @@ describe('buildHandlers', () => {
 		const handlers = buildHandlers({
 			userDataDir: dir,
 			emitProgress: () => {},
-			logger: { info: () => {}, error: () => {} }
+			logger: { info: () => {}, error: () => {} },
+			credentials: credentials()
 		});
 
 		for (const id of ['../../etc/passwd', 'run', '']) {
@@ -122,7 +139,8 @@ describe('discovery handlers', () => {
 	const base = () => ({
 		userDataDir: dir,
 		emitProgress: () => {},
-		logger: { info: () => {}, error: () => {} }
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
 	});
 
 	it('maps a good answer to ok', async () => {
@@ -213,5 +231,90 @@ describe('discovery handlers', () => {
 			discovery: { findClaude: async () => ({ available: true, version: '2.1.237' }) }
 		});
 		expect(await handlers.discoveryPreflight()).toEqual({ available: true, version: '2.1.237' });
+	});
+});
+
+describe('credential handlers', () => {
+	const base = () => ({
+		userDataDir: dir,
+		emitProgress: () => {},
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
+	});
+
+	it('saves, reports and removes an allowed credential without ever returning it', async () => {
+		const handlers = buildHandlers(base());
+
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(false);
+		await handlers.setCredential('semrush.apiKey', 'secret-key');
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(true);
+
+		// There is deliberately no getter: the renderer learns only that a
+		// credential exists.
+		expect('getCredential' in handlers).toBe(false);
+
+		await handlers.removeCredential('semrush.apiKey');
+		expect(await handlers.hasCredential('semrush.apiKey')).toBe(false);
+	});
+
+	it('accepts the Google client id and secret', async () => {
+		const handlers = buildHandlers(base());
+		await handlers.setCredential('google.clientId', 'id');
+		await handlers.setCredential('google.clientSecret', 'secret');
+		expect(await handlers.hasCredential('google.clientId')).toBe(true);
+		expect(await handlers.hasCredential('google.clientSecret')).toBe(true);
+	});
+
+	it('rejects any key outside the allowed list', async () => {
+		const handlers = buildHandlers(base());
+
+		// A refresh token is written only by the consent flow, never by the
+		// renderer, so its key is not settable here either.
+		for (const key of ['google.refresh.example.com', 'semrush', '__proto__', '']) {
+			await expect(handlers.setCredential(key, 'x')).rejects.toThrow('Unknown credential.');
+			await expect(handlers.hasCredential(key)).rejects.toThrow('Unknown credential.');
+			await expect(handlers.removeCredential(key)).rejects.toThrow('Unknown credential.');
+		}
+	});
+});
+
+describe('client identity during a run', () => {
+	const base = () => ({
+		userDataDir: dir,
+		emitProgress: () => {},
+		logger: { info: () => {}, error: () => {} },
+		credentials: credentials()
+	});
+
+	it('treats the run client as the client and a competitor as not, then forgets it', async () => {
+		const handlers = buildHandlers(base());
+
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: ['rival.com'],
+			enabledAnalyzers: []
+		});
+
+		expect(handlers.isClient('https://example.com/')).toBe(true);
+		expect(handlers.isClient('https://rival.com/')).toBe(false);
+
+		await handlers.settled(run.id);
+		// The removal is fired and forgotten after settled, so give it a turn.
+		await new Promise((r) => setTimeout(r, 5));
+		expect(handlers.isClient('https://example.com/')).toBe(false);
+	});
+
+	it('re-registers the client when a run is resumed', async () => {
+		const handlers = buildHandlers(base());
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: [],
+			enabledAnalyzers: []
+		});
+		await handlers.settled(run.id);
+		await new Promise((r) => setTimeout(r, 5));
+
+		await handlers.resumeRun(run.id);
+		expect(handlers.isClient('https://example.com/')).toBe(true);
 	});
 });

@@ -54,6 +54,16 @@
 			id: 'content',
 			label: 'Spelling and grammar',
 			note: 'Australian English spelling offline; grammar only if switched on in settings'
+		},
+		{
+			id: 'traffic-estimated',
+			label: 'Traffic (estimated)',
+			note: 'Semrush estimates; needs an API key in Settings'
+		},
+		{
+			id: 'traffic-owned',
+			label: 'Traffic (measured)',
+			note: "The client's own Search Console and GA4 figures; needs their Google account connected"
 		}
 	];
 

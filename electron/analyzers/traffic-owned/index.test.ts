@@ -67,8 +67,8 @@ function noCredentialsStore(): FakeStore {
 	} as FakeStore;
 }
 
-const settings = { ga4PropertyId: 'properties/123', days: 90 };
 const CLIENT_DOMAIN = 'https://client.example.com/';
+const settings = { ga4PropertyIds: { 'client.example.com': 'properties/123' }, days: 90 };
 const COMPETITOR_DOMAIN = 'https://competitor.example.com/';
 
 function isClient(domain: string): boolean {
@@ -124,7 +124,7 @@ describe('traffic-owned analyze', () => {
 		const controller = new AbortController();
 		const result = await analyzer.analyze(
 			CLIENT_DOMAIN,
-			{ ga4PropertyId: null, days: 90 },
+			{ ga4PropertyIds: {}, days: 90 },
 			controller.signal
 		);
 

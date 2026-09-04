@@ -16,3 +16,10 @@ export type GrammarSettings = {
 export type SeoQuakeSettings = { chromePath: string | null; extensionPath: string | null };
 export type ContentSettings = { ignoreWords: string[]; grammar: GrammarSettings };
 export type OldSeoSettings = { maxPages: number };
+
+export type TrafficEstimatedSettings = { database: string };
+export type TrafficOwnedSettings = {
+	/** GA4 property id per site, keyed by hostname with no leading www. */
+	ga4PropertyIds: Record<string, string>;
+	days: number;
+};

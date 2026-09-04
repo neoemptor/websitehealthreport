@@ -31,4 +31,15 @@ describe('SettingsStore', () => {
 		await fs.writeFile(path.join(dir, 'settings.json'), '{ broken', 'utf-8');
 		expect(await store.read()).toEqual(DEFAULT_SETTINGS);
 	});
+
+	it('supplies discovery defaults when an older settings file has none', async () => {
+		await fs.writeFile(
+			path.join(dir, 'settings.json'),
+			JSON.stringify({ enabledAnalyzers: ['keywords'], analyzers: {} }),
+			'utf-8'
+		);
+		const settings = await store.read();
+		expect(settings.discovery).toEqual({ readSite: true, webSearch: true, hint: '' });
+		expect(settings.enabledAnalyzers).toEqual(['keywords']);
+	});
 });

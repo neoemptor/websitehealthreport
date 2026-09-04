@@ -2,7 +2,7 @@ import type { Analyzer } from '../types';
 import { fetchText } from '../../http';
 import { parseCdx, type WaybackData } from './parse';
 
-const BASE_URL = 'http://web.archive.org/cdx/search/cdx';
+const BASE_URL = 'https://web.archive.org/cdx/search/cdx';
 
 export const waybackAnalyzer: Analyzer<Record<string, never>> = {
 	id: 'wayback',

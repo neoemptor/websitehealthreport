@@ -30,9 +30,13 @@ export function jsDependencyRatio(rawText: string, renderedText: string): number
 }
 
 function stripTags(html: string): string {
-	return html
+	const withoutHead = /<body[^>]*>/i.test(html) ? html.slice(html.search(/<body[^>]*>/i)) : html;
+
+	return withoutHead
+		.replace(/<!--[\s\S]*?-->/g, ' ')
 		.replace(/<script[\s\S]*?<\/script>/gi, ' ')
 		.replace(/<style[\s\S]*?<\/style>/gi, ' ')
+		.replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
 		.replace(/<[^>]+>/g, ' ')
 		.replace(/\s+/g, ' ');
 }
@@ -40,7 +44,8 @@ function stripTags(html: string): string {
 async function exists(url: string, signal: AbortSignal): Promise<boolean> {
 	try {
 		return (await fetchText(url, { signal, timeoutMs: 10_000 })).status === 200;
-	} catch {
+	} catch (error) {
+		if (signal.aborted) throw error;
 		return false;
 	}
 }
@@ -76,9 +81,11 @@ export const aeoAnalyzer: Analyzer<Record<string, never>> = {
 
 		const [page, robots, llmsTxt, sitemap] = await Promise.all([
 			fetchText(domain, { signal, timeoutMs: 20_000 }),
-			fetchText(`${origin}/robots.txt`, { signal, timeoutMs: 10_000 }).catch(() => ({
-				body: ''
-			})),
+			fetchText(`${origin}/robots.txt`, { signal, timeoutMs: 10_000 })
+				.then((response) => (response.status === 200 ? response : { body: '' }))
+				.catch(() => ({
+					body: ''
+				})),
 			exists(`${origin}/llms.txt`, signal),
 			exists(`${origin}/sitemap.xml`, signal)
 		]);
@@ -124,7 +131,7 @@ async function renderPage(
 ): Promise<string> {
 	const page = await browser.newPage();
 	try {
-		await page.goto(domain, { waitUntil: 'networkidle2' });
+		await page.goto(domain, { waitUntil: 'domcontentloaded', timeout: 20_000 });
 		return await page.evaluate(() => document.body.innerText);
 	} finally {
 		await page.close();

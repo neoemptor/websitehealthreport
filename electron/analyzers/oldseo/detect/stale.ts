@@ -7,6 +7,7 @@ import {
 	words,
 	type PageSnapshot
 } from '../snapshot';
+import { mentionsPhrase } from './hidden';
 
 const NOISE_ROBOTS = new Set(['index', 'follow', 'index,follow', 'index, follow', 'all']);
 const TITLE_MAX_CHARS = 70;
@@ -56,7 +57,7 @@ export function detectStale(pages: PageSnapshot[]): Finding[] {
 		if (page.title.length > TITLE_MAX_CHARS) {
 			const top = topPhrases(page.visibleText, TOP_PHRASES).map((t) => t.phrase);
 			const lower = page.title.toLowerCase();
-			if (top.filter((p) => lower.includes(p)).length >= TITLE_KEYWORD_HITS)
+			if (top.filter((p) => mentionsPhrase(lower, p)).length >= TITLE_KEYWORD_HITS)
 				add(page.path, `title of ${page.title.length} characters: "${page.title}"`);
 		}
 

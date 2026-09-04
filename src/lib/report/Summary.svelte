@@ -82,21 +82,22 @@
 	{/if}
 
 	<div class="mt-3 overflow-x-auto print:overflow-visible">
-		<table class="w-full border-collapse text-left">
+		<table class="w-full table-fixed border-collapse text-left">
 			<thead>
 				<tr class="border-b border-dark-200">
-					<th class="py-1.5 pr-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
+					<th
+						class="w-[26%] py-1.5 pr-3 text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
 						>Site</th
 					>
 					{#each run.enabledAnalyzers as id}
 						<th
-							class="py-1.5 pr-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
+							class="whitespace-normal py-1.5 pr-3 text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
 						>
 							{analyzerName(id)}
 						</th>
 					{/each}
 					<th
-						class="w-16 py-1.5 text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
+						class="w-12 py-1.5 text-right text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
 					>
 						Grade
 					</th>
@@ -113,7 +114,7 @@
 						</td>
 						{#each row.cells as cell}
 							<td
-								class="py-2 pr-3 align-top text-[11px] font-semibold uppercase tracking-wide {tone[
+								class="whitespace-nowrap py-2 pr-3 align-top text-[10px] font-semibold uppercase tracking-wide {tone[
 									cell.tone
 								]}"
 							>

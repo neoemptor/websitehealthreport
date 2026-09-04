@@ -29,6 +29,21 @@
 			id: 'oldseo',
 			label: 'Old SEO practices',
 			note: 'Hidden text, stuffing, cloaking, duplicate pages'
+		},
+		{
+			id: 'wayback',
+			label: 'Wayback history',
+			note: 'How long the site has been archived and how often'
+		},
+		{
+			id: 'security',
+			label: 'Security',
+			note: 'HTTPS, certificate, security headers, cookie flags'
+		},
+		{
+			id: 'aeo',
+			label: 'AI Agent Optimisation',
+			note: 'Can AI crawlers read the site without JavaScript'
 		}
 	];
 

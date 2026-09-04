@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -30,9 +30,18 @@ describe('CredentialStore', () => {
 	});
 
 	it('never writes the plaintext to disk', async () => {
+		const spy = vi.spyOn(fakeCrypto, 'encryptString');
 		await store.set('semrush', 'key-123');
-		const raw = await fs.readFile(path.join(dir, 'credentials.enc'), 'utf-8');
-		expect(raw).not.toContain('key-123');
+		const entries = await fs.readdir(dir, { recursive: true } as { recursive: boolean });
+		for (const entry of entries) {
+			const full = path.join(dir, entry as unknown as string);
+			const stat = await fs.stat(full);
+			if (!stat.isFile()) continue;
+			const raw = await fs.readFile(full, 'utf-8');
+			expect(raw).not.toContain('key-123');
+		}
+		expect(spy).toHaveBeenCalledWith('key-123');
+		spy.mockRestore();
 	});
 
 	it('reports presence without exposing the value', async () => {
@@ -57,5 +66,53 @@ describe('CredentialStore', () => {
 			isEncryptionAvailable: () => false
 		});
 		await expect(insecure.set('semrush', 'key-123')).rejects.toThrow(/encryption/i);
+	});
+
+	it.skipIf(process.platform === 'win32')(
+		'restricts the store file and directory to the owner',
+		async () => {
+			await store.set('semrush', 'key-123');
+			const filePath = path.join(dir, 'credentials.enc');
+			const fileStat = await fs.stat(filePath);
+			const dirStat = await fs.stat(dir);
+			expect(fileStat.mode & 0o777).toBe(0o600);
+			expect(dirStat.mode & 0o777).toBe(0o700);
+		}
+	);
+
+	it('serialises overlapping set() calls so no write is lost', async () => {
+		await Promise.all([store.set('a', '1'), store.set('b', '2')]);
+		expect(await store.get('a')).toBe('1');
+		expect(await store.get('b')).toBe('2');
+	});
+
+	it('returns null (not a throw) for a corrupt or foreign ciphertext, though has() still reports it', async () => {
+		// A crypto backend that rejects anything it didn't produce itself, so a bogus
+		// or foreign value in the envelope is guaranteed to fail decryption rather
+		// than merely coming out garbled.
+		const strictCrypto = {
+			isEncryptionAvailable: () => true,
+			encryptString: (s: string) => Buffer.from(`ENC:${s}`, 'utf-8').reverse(),
+			decryptString: (b: Buffer) => {
+				const raw = Buffer.from(b).reverse().toString('utf-8');
+				if (!raw.startsWith('ENC:')) throw new Error('bad ciphertext');
+				return raw.slice(4);
+			}
+		};
+		const strictStore = new CredentialStore(dir, strictCrypto);
+		await strictStore.set('semrush', 'key-123');
+		const filePath = path.join(dir, 'credentials.enc');
+		const envelope = JSON.parse(await fs.readFile(filePath, 'utf-8')) as Record<string, string>;
+		envelope.semrush = 'not-valid-base64-ciphertext!!';
+		await fs.writeFile(filePath, JSON.stringify(envelope), 'utf-8');
+
+		await expect(strictStore.get('semrush')).resolves.toBeNull();
+		// has() only proves the key is present in the envelope, not that it decrypts.
+		expect(await strictStore.has('semrush')).toBe(true);
+	});
+
+	it('does not create the file when removing a key that was never set', async () => {
+		await store.remove('nope');
+		await expect(fs.access(path.join(dir, 'credentials.enc'))).rejects.toThrow();
 	});
 });

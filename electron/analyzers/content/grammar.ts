@@ -29,8 +29,23 @@ export function resolveEndpoint(settings: GrammarSettings): string | null {
 			if (!settings.endpoint) {
 				throw new Error('A custom LanguageTool server was selected but no endpoint is configured.');
 			}
-			return settings.endpoint;
+			return validateHttpUrl(settings.endpoint);
 	}
+}
+
+function validateHttpUrl(endpoint: string): string {
+	let url: URL;
+	try {
+		url = new URL(endpoint);
+	} catch {
+		throw new Error('The grammar server address must start with http:// or https://.');
+	}
+
+	if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+		throw new Error('The grammar server address must start with http:// or https://.');
+	}
+
+	return endpoint;
 }
 
 type LanguageToolMatch = {
@@ -45,15 +60,25 @@ export function parseLanguageTool(payload: unknown): GrammarFinding[] {
 		throw new Error('LanguageTool response contained no matches array.');
 	}
 
-	return (matches as LanguageToolMatch[]).map((match) => ({
-		message: match.message,
-		// The API reports the offending span as an offset into a context window.
-		context: match.context.text.slice(
-			match.context.offset,
-			match.context.offset + match.context.length
-		),
-		ruleId: match.rule.id
-	}));
+	return (matches as LanguageToolMatch[]).map((match) => {
+		const { text, offset, length } = match.context;
+		if (
+			!Number.isInteger(offset) ||
+			!Number.isInteger(length) ||
+			offset < 0 ||
+			length < 0 ||
+			offset + length > text.length
+		) {
+			throw new Error('LanguageTool response contained a malformed match context.');
+		}
+
+		return {
+			message: match.message,
+			// The API reports the offending span as an offset into a context window.
+			context: text.slice(offset, offset + length),
+			ruleId: match.rule.id
+		};
+	});
 }
 
 export async function checkGrammar(

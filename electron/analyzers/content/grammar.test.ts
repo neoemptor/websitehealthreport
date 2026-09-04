@@ -24,6 +24,18 @@ describe('resolveEndpoint', () => {
 	it('throws when custom is selected without an endpoint', () => {
 		expect(() => resolveEndpoint({ provider: 'languagetool-custom' })).toThrow(/endpoint/i);
 	});
+
+	it('throws a readable reason when the custom endpoint is not http(s)', () => {
+		expect(() =>
+			resolveEndpoint({ provider: 'languagetool-custom', endpoint: 'ftp://example.com/check' })
+		).toThrow('The grammar server address must start with http:// or https://.');
+	});
+
+	it('throws a readable reason when the custom endpoint is not a valid URL', () => {
+		expect(() =>
+			resolveEndpoint({ provider: 'languagetool-custom', endpoint: 'not a url' })
+		).toThrow('The grammar server address must start with http:// or https://.');
+	});
 });
 
 describe('parseLanguageTool', () => {
@@ -48,6 +60,45 @@ describe('parseLanguageTool', () => {
 
 	it('throws on a malformed payload', () => {
 		expect(() => parseLanguageTool({ nope: 1 })).toThrow(/matches/i);
+	});
+
+	it('throws when offset is non-numeric', () => {
+		const payload = {
+			matches: [
+				{
+					message: 'Possible typo',
+					context: { text: 'a teh b', offset: 'two', length: 3 },
+					rule: { id: 'TYPO' }
+				}
+			]
+		};
+		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
+	});
+
+	it('throws when length is out of range', () => {
+		const payload = {
+			matches: [
+				{
+					message: 'Possible typo',
+					context: { text: 'a teh b', offset: 2, length: 100 },
+					rule: { id: 'TYPO' }
+				}
+			]
+		};
+		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
+	});
+
+	it('throws when offset is negative', () => {
+		const payload = {
+			matches: [
+				{
+					message: 'Possible typo',
+					context: { text: 'a teh b', offset: -1, length: 3 },
+					rule: { id: 'TYPO' }
+				}
+			]
+		};
+		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
 	});
 });
 

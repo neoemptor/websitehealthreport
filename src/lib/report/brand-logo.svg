@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+  <!--
+    D S Bailey Freelancer mark: three stroked cells and a handle. Taken from the
+    business website's assets/images/logo.svg with the Inkscape editor metadata
+    removed and one stray #302e81 fill dropped — it sat on a two-point line,
+    which has no area, so it never rendered. Strokes inherit currentColor: the
+    guide sets the mark in brand orange, and the letterhead decides that.
+  -->
+  <g transform="translate(43.025773,27.103596)">
+    <path stroke-width="40" d="M 494.56517,-673.18562 H 379.38328" />
+    <path stroke-width="40" d="M 384.45177,-469.78555 343.72882,-510.5085" />
+    <rect stroke-width="80" x="445.10983" y="-405.40869" width="183.05084" height="195.25423" />
+    <rect stroke-width="80" x="97.313202" y="-770.81274" width="183.05084" height="195.25423" />
+    <rect stroke-width="80" x="597.65222" y="-770.81274" width="183.05084" height="195.25423" />
+  </g>
+</svg>

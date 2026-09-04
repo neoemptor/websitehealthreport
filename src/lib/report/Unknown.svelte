@@ -6,7 +6,7 @@
 </script>
 
 <pre
-	class="mt-2 overflow-x-auto whitespace-pre-wrap border-l-2 border-rule bg-black/[0.03] px-3 py-2 font-mono text-[10.5px] leading-relaxed text-[#3A3730]">{JSON.stringify(
+	class="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-dark-100 px-3 py-2 font-mono text-[10.5px] leading-relaxed text-dark-600">{JSON.stringify(
 		data,
 		null,
 		2

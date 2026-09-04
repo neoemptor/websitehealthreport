@@ -23,6 +23,8 @@
 		"qr:regen": "node -e \"require('qrcode').toString(process.argv[1],{type:'svg',errorCorrectionLevel:'M',margin:4}).then(s=>require('fs').writeFileSync('src/lib/report/qr-website.svg',s))\" https://dsbaileyfreelancer.com.au"
 	},
 	"dependencies": {
+		"@fontsource/inter": "^5.3.0",
+		"@fontsource/poppins": "^5.3.0",
 		"axios": "^1.5.1",
 		"chrome-launcher": "^1.2.1",
 		"lighthouse": "^11.7.1",

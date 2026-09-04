@@ -103,6 +103,23 @@ inside the app before exporting. The operator wants one; nothing is built.
   | Email   | `admin@dsbaileyfreelancer.com.au`               |
   | Mobile  | `+61430227786` — displayed as `+61 430 227 786` |
 
+- **The dsbaileyfreelancer.com.au design guide is binding.** The app carries
+  the business identity: brand orange `#FDB118` as the single accent, its
+  gradient companion `#F7931E`, page `#0A0A0A` and card `#1A1A1A` surfaces on
+  screen, and the guide's own **light print variant** on paper — white stock,
+  `#1A1A1A` text, orange reserved for headings, rules and icons. The guide
+  states this split itself: dark for screen, light for everyday stationery.
+- **Typography is Poppins for headings and Inter for body**, as the guide
+  records the site actually renders (its declared Zuume/Paralucent never
+  load). Both are OFL and ship inside the app, since it runs offline.
+- **Print rules from the guide that constrain the report:** never orange body
+  text on white — orange type is for headings 14pt and up; logo at 25mm
+  minimum width with clear space equal to its height on all sides; body copy
+  9.5–11pt. Green/red status feedback is permitted "sparingly", which the
+  ok/failed states use.
+- **Email discrepancy, unresolved by the operator:** the guide's contact block
+  lists `sales@dsbaileyfreelancer.com.au`; the operator supplied `admin@`. The
+  operator's direct answer is used. Confirm before a client receives one.
 - **Australian English throughout** all client-facing output — spelling and
   date formats. The product ships an Australian grammar checker, so its own
   copy contradicting that would undercut the thing it sells.
@@ -121,8 +138,15 @@ inside the app before exporting. The operator wants one; nothing is built.
 
 **Absences future work must not fabricate:**
 
-- No logo or supplied brand asset exists. The letterhead is set in type; there
-  is no mark to place.
+- **The logo exists** — `assets/images/logo.svg` on the business website: three
+  stroked rounded cells and a handle, drawn entirely in brand orange `#FDB118`
+  strokes on a transparent ground. The file carries one stray `#302E81` fill on
+  a two-point line, which has no area and renders nothing: an Inkscape artefact,
+  not a brand colour. Use the SVG master as vector, never a raster of it.
+- **The website design guide exists** —
+  `E:\D S Bailey Freelancer\DSBF-Website-28-08-2025\dsbaileyfreelancer-online\docs\DESIGN-GUIDE.pdf`
+  (v1.0, July 2026), with the normative palette in that repo's
+  `tailwind.config.js`. It is the visual authority for this product.
 - No testimonials, customer names, pricing, case studies or benchmarks exist.
 - `radscafe.com.au` appears in old code as a client domain. It no longer
   resolves — the domain is dead and must not be used as an example.

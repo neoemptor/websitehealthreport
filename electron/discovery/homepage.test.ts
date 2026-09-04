@@ -22,6 +22,25 @@ describe('stripHtml', () => {
 		expect(out.text).toBe('Home About Garage door repairs We service Rockingham & Mandurah.');
 	});
 
+	it('keeps a quoted ">" inside an attribute inside the tag', () => {
+		const html = '<body><a href="/x" title="doors > gates">Roller doors</a> fitted</body>';
+		expect(stripHtml(html).text).toBe('Roller doors fitted');
+	});
+
+	it('drops a tag left unclosed at the end of a truncated body', () => {
+		const html = '<body><p>Real words here</p><div class="x';
+		expect(stripHtml(html).text).toBe('Real words here');
+	});
+
+	it('drops a script whose attributes contain a ">"', () => {
+		const html = '<body><script data-x="a>b">alert(1)</script><p>Visible</p></body>';
+		expect(stripHtml(html).text).toBe('Visible');
+	});
+
+	it('leaves a bare "<" in prose alone', () => {
+		expect(stripHtml('<body><p>2 < 3 always</p></body>').text).toBe('2 < 3 always');
+	});
+
 	it('caps text at 6000 characters', () => {
 		const long = `<html><body>${'word '.repeat(3000)}</body></html>`;
 		expect(stripHtml(long).text.length).toBe(6000);
@@ -103,6 +122,29 @@ describe('fetchHomepage', () => {
 			})) as unknown as typeof fetch;
 		const out = await fetchHomepage('https://example.com/', new AbortController().signal, spy);
 		expect(out.text.length).toBeLessThanOrEqual(6_000);
+	});
+
+	it('stops reading and cancels the body once past the 1 MB cap', async () => {
+		let cancelled = false;
+		const chunk = new TextEncoder().encode('a'.repeat(600_000));
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(chunk);
+				controller.enqueue(chunk);
+				controller.enqueue(chunk);
+				controller.close();
+			},
+			cancel() {
+				cancelled = true;
+			}
+		});
+		const spy = (async () =>
+			new Response(stream, {
+				status: 200,
+				headers: { 'content-type': 'text/html' }
+			})) as unknown as typeof fetch;
+		await fetchHomepage('https://example.com/', new AbortController().signal, spy);
+		expect(cancelled).toBe(true);
 	});
 
 	it('sends an HTML accept header and a descriptive user agent', async () => {

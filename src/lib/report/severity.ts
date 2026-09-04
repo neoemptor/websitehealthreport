@@ -13,6 +13,7 @@ type SecurityHeaderFinding = {
 	value: string | null;
 	severity: 'high' | 'medium' | 'low';
 	note: string;
+	weak?: boolean;
 };
 
 type SecurityCookieFinding = {
@@ -367,6 +368,20 @@ function securitySeverity(d: SecurityData): Severity {
 			finding: `${missingMedium.length} security header${
 				missingMedium.length === 1 ? ' is' : 's are'
 			} missing, starting with ${headerTitle(missingMedium[0].header)}.`
+		};
+	}
+
+	// A header that is present but toothless — X-Frame-Options that still
+	// allows framing, an HSTS max-age of a day — is no better than a missing
+	// medium-severity one, and reads the same way.
+	const weakHeaders = d.headers.filter((h) => h.present && h.weak === true && h.severity !== 'low');
+	if (weakHeaders.length > 0) {
+		return {
+			word: 'Needs work',
+			tone: 'warn',
+			finding: `${weakHeaders.length} security header${
+				weakHeaders.length === 1 ? ' is' : 's are'
+			} present but too weak to help, starting with ${headerTitle(weakHeaders[0].header)}.`
 		};
 	}
 

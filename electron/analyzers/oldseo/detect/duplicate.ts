@@ -1,6 +1,6 @@
 import type { Finding } from '../../../../src/lib/shared/oldseo';
 import { jaccard, shingles, words, type PageSnapshot } from '../snapshot';
-import { PLACES } from './places';
+import { AMBIGUOUS_PLACES, PLACES } from './places';
 
 const PAIR_MIN_SIMILARITY = 0.9;
 const PAIR_MIN_WORDS = 100;
@@ -22,21 +22,34 @@ function tokens(title: string): string[] {
 	return title.split(/\s+/).filter(Boolean);
 }
 
+/** A token the title itself capitalises, which is how a name is written. */
+function capitalised(token: string): boolean {
+	const first = token.replace(/^[^A-Za-z]+/, '').charAt(0);
+	return first !== '' && first === first.toUpperCase();
+}
+
 /**
  * Two titles that differ in exactly one token position, where both differing
  * tokens are places or site keywords, share a doorway pattern. Multi-word
  * places ("canning vale") are handled by also trying two-token windows.
+ *
+ * A name that is also an ordinary English word (Sale, Success, Orange) only
+ * counts when the title capitalises every token of it — otherwise "Great
+ * Roller Door sale" reads as a doorway page for the town of Sale.
  */
-function pattern(title: string, allowed: Set<string>): string | null {
+export function pattern(title: string, allowed: Set<string>): string | null {
 	const t = tokens(title);
 	for (let width = 2; width >= 1; width--) {
 		for (let i = 0; i + width <= t.length; i++) {
-			const window = t
-				.slice(i, i + width)
+			const group = t.slice(i, i + width);
+			const window = group
 				.join(' ')
 				.toLowerCase()
 				.replace(/[|,.:;!?-]+$/g, '');
-			if (!allowed.has(window)) continue;
+			if (!allowed.has(window)) {
+				if (!AMBIGUOUS_PLACES.has(window)) continue;
+				if (!group.every(capitalised)) continue;
+			}
 			const rest = [...t.slice(0, i), '{place}', ...t.slice(i + width)].join(' ');
 			return rest;
 		}

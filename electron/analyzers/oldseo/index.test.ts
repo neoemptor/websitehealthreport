@@ -11,7 +11,8 @@ const state = vi.hoisted(() => ({
 	launches: 0,
 	closes: 0,
 	pages: {} as Record<string, { links: string[]; fail?: boolean; hang?: boolean }>,
-	robots: '' as string | null
+	robots: '' as string | null,
+	visits: [] as string[]
 }));
 
 vi.mock('puppeteer', () => ({
@@ -25,6 +26,7 @@ vi.mock('puppeteer', () => ({
 					return {
 						goto: async (url) => {
 							current = url;
+							state.visits.push(url);
 							const p = state.pages[url];
 							if (!p) throw new Error('net::ERR_NAME_NOT_RESOLVED');
 							if (p.fail) throw new Error('net::ERR_CONNECTION_RESET');
@@ -69,6 +71,7 @@ beforeEach(() => {
 	state.launches = 0;
 	state.closes = 0;
 	state.robots = '';
+	state.visits = [];
 	state.pages = {
 		'https://example.com/': { links: ['/a', '/b', '/admin/secret', 'https://other.com/'] },
 		'https://example.com/a': { links: ['/c'] },
@@ -97,6 +100,29 @@ describe('oldseo analyze', () => {
 		expect(data.pagesRead).toBe(3); // home + a + b
 		expect(data.pagesSkipped).toBe(0);
 		expect(state.closes).toBe(1);
+	});
+
+	it('never reads a page robots.txt disallows, even with budget to spare', async () => {
+		state.robots = 'User-agent: *\nDisallow: /admin';
+		const data = await oldSeoAnalyzer.analyze(
+			'https://example.com/',
+			{ maxPages: 3 },
+			new AbortController().signal
+		);
+		expect(state.visits).not.toContain('https://example.com/admin/secret');
+		expect(state.visits).toContain('https://example.com/a');
+		expect(data.pagesRead).toBe(4); // home + a + b + c, the disallowed page skipped
+	});
+
+	it('falls back to the default page cap when maxPages is not a finite number', async () => {
+		state.robots = 'User-agent: *\nDisallow: /admin';
+		const data = await oldSeoAnalyzer.analyze(
+			'https://example.com/',
+			{ maxPages: Number.NaN },
+			new AbortController().signal
+		);
+		// Not 1: a NaN cap must not silently reduce the crawl to the homepage.
+		expect(data.pagesRead).toBe(4);
 	});
 
 	it('counts a failing internal page as skipped and continues', async () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { detectDuplicate } from './duplicate';
-import { PLACES } from './places';
+import { AMBIGUOUS_PLACES, PLACES } from './places';
 import { makeSnapshot } from '../snapshot';
 
 const body = (seed: string) => Array.from({ length: 120 }, (_, i) => `${seed} word${i}`).join(' ');
@@ -60,6 +60,38 @@ describe('detectDuplicate', () => {
 			makeSnapshot({ path: `/${i}`, title: `Doors ${place}`, visibleText: body(`r${i}`) })
 		);
 		expect(detectDuplicate(pages)).toEqual([]);
+	});
+
+	it('is quiet for ordinary English words that happen to be place names', () => {
+		const pages = ['Great Roller Door Sale', 'Success Stories', 'Our Success'].map((title, i) =>
+			makeSnapshot({ path: `/${i}`, title, visibleText: body(`t${i}`) })
+		);
+		expect(detectDuplicate(pages)).toEqual([]);
+	});
+
+	it('does not read a lower-case "sale" as the town of Sale', () => {
+		const pages = [0, 1, 2].map((i) =>
+			makeSnapshot({ path: `/${i}`, title: 'Doors sale', visibleText: body(`u${i}`) })
+		);
+		expect(detectDuplicate(pages)).toEqual([]);
+	});
+
+	it('still flags an ambiguous name when the title capitalises it', () => {
+		const pages = ['Orange', 'Bathurst', 'Dubbo'].map((place, i) =>
+			makeSnapshot({ path: `/${i}`, title: `Doors ${place}`, visibleText: body(`v${i}`) })
+		);
+		const [f] = detectDuplicate(pages);
+		expect(f).toMatchObject({ check: 'duplicate', severity: 'medium', page: '/0' });
+		expect(f.evidence).toBe('"Doors {place}" on 3 pages');
+	});
+
+	it('keeps the ambiguous names out of PLACES and in their own list', () => {
+		for (const w of ['success', 'sale', 'york', 'orange', 'victoria']) {
+			expect(PLACES.has(w)).toBe(false);
+			expect(AMBIGUOUS_PLACES.has(w)).toBe(true);
+		}
+		// The multi-word forms are unambiguous and stay in PLACES.
+		expect(PLACES.has('victoria park')).toBe(true);
 	});
 
 	it('ships the states and capitals', () => {

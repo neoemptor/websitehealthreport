@@ -23,6 +23,7 @@ import { detectStale } from './detect/stale';
 export type OldSeoSettings = { maxPages: number };
 
 const PAGE_TIMEOUT_MS = 20_000;
+const DEFAULT_MAX_PAGES = 10;
 
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 
@@ -31,7 +32,7 @@ export const oldSeoAnalyzer: Analyzer<OldSeoSettings> = {
 	label: 'Old SEO practices',
 	concurrency: 'limited',
 	timeoutMs: 180_000,
-	defaultSettings: { maxPages: 10 },
+	defaultSettings: { maxPages: DEFAULT_MAX_PAGES },
 
 	async preflight() {
 		try {
@@ -78,7 +79,12 @@ async function crawl(
 	const base = new URL(domain);
 	const robots = await fetchRobots(base, signal);
 	const disallow = robots === null ? [] : parseRobots(robots);
-	const max = Math.max(0, Math.min(25, Math.floor(settings.maxPages)));
+	// A NaN or Infinity here would make every comparison below false and the
+	// crawl would read only the homepage; fall back to the declared default.
+	const requested = Number.isFinite(settings.maxPages)
+		? Math.floor(settings.maxPages)
+		: DEFAULT_MAX_PAGES;
+	const max = Math.max(0, Math.min(25, requested));
 
 	const snapshots: PageSnapshot[] = [];
 	const visited = new Set<string>();

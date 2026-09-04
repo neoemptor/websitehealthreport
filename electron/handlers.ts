@@ -13,6 +13,7 @@ import { createTrafficEstimatedAnalyzer } from './analyzers/traffic-estimated';
 import { createTrafficOwnedAnalyzer } from './analyzers/traffic-owned';
 import type { CredentialStore } from './credentials';
 import { refreshTokenKey } from './analyzers/traffic-owned/oauth';
+import { AbortedError } from './analyzers/abort';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -183,7 +184,10 @@ export function buildHandlers(deps: HandlerDeps) {
 					deps.logger.error('discovery:failed', error.detail);
 					return { status: 'failed', error: error.message };
 				}
+				if (error instanceof AbortedError) return { status: 'cancelled' };
 				const message = error instanceof Error ? error.message : String(error);
+				// Foreign errors (the CLI's own abort paths, a library's) carry the
+				// message but not the type, so the prefix stays as the fallback.
 				if (/^Aborted/.test(message)) return { status: 'cancelled' };
 				return { status: 'failed', error: message };
 			} finally {

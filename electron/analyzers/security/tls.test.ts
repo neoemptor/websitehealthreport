@@ -74,6 +74,13 @@ describe('inspectTls', () => {
 		expect(currentSocket.destroy).toHaveBeenCalled();
 	});
 
+	it('clears the idle timeout before destroying the socket on success', async () => {
+		const promise = inspectTls('example.com');
+		connectCallback?.();
+		await promise;
+		expect(currentSocket.setTimeout).toHaveBeenCalledWith(0);
+	});
+
 	it('resolves with daysRemaining: null when valid_to is unparseable', async () => {
 		currentSocket.getPeerCertificate = vi.fn(() => ({
 			valid_to: 'not a date',

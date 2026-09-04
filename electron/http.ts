@@ -1,3 +1,5 @@
+import { AbortedError } from './analyzers/abort';
+
 export const USER_AGENT = 'WebsiteHealthReport/1.0 (+https://dsbaileyfreelancer.com.au)';
 
 export type FetchTextResult = {
@@ -12,7 +14,7 @@ export async function fetchText(
 	opts: { timeoutMs?: number; signal?: AbortSignal } = {}
 ): Promise<FetchTextResult> {
 	if (opts.signal?.aborted) {
-		throw new Error('Aborted: the task timed out or the run was cancelled.');
+		throw new AbortedError();
 	}
 
 	const controller = new AbortController();
@@ -42,9 +44,44 @@ export async function fetchText(
 		if (timedOut) {
 			throw new Error(`Timed out after ${Math.max(1, Math.round(timeoutMs / 1000))}s.`);
 		}
+		// The caller's own signal fired: that is a cancellation, not a network
+		// fault, and the typed error is what tells the two apart downstream.
+		if (opts.signal?.aborted) throw new AbortedError();
 		throw err;
 	} finally {
 		clearTimeout(timer);
 		opts.signal?.removeEventListener('abort', onAbort);
 	}
+}
+
+/** The default read cap: a page bigger than this is being read for its text, not its bytes. */
+export const BYTE_CAP = 1_000_000;
+
+/**
+ * Reads a response body as text, stopping once `cap` bytes have arrived and
+ * cancelling the rest. Shared by every fetch that only wants a page's words:
+ * without the cancel, a multi-gigabyte body keeps streaming into a socket
+ * nobody is reading any more.
+ */
+export async function readCapped(response: Response, cap: number = BYTE_CAP): Promise<string> {
+	const reader = response.body?.getReader();
+	if (!reader) return (await response.text()).slice(0, cap);
+	const decoder = new TextDecoder();
+	let text = '';
+	let received = 0;
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			received += value.byteLength;
+			text += decoder.decode(value, { stream: true });
+			if (received >= cap) {
+				await reader.cancel().catch(() => {});
+				break;
+			}
+		}
+	} finally {
+		text += decoder.decode();
+	}
+	return text.slice(0, cap);
 }

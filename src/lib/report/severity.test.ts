@@ -111,3 +111,44 @@ describe('severityOf — keywords', () => {
 		});
 	});
 });
+
+describe('severityOf — oldseo', () => {
+	const ok = (
+		findings: Array<{ check: string; severity: string; page: string; evidence: string }>,
+		pagesRead = 6
+	) => severityOf('oldseo', { status: 'ok', data: { pagesRead, pagesSkipped: 0, findings } });
+
+	it('is Good with a page count when nothing was found', () => {
+		expect(ok([])).toEqual({
+			word: 'Good',
+			tone: 'ok',
+			finding: 'No old or manipulative SEO practices found across 6 pages.'
+		});
+	});
+
+	it('is Poor on any high finding and names the worst', () => {
+		const s = ok([
+			{ check: 'stale', severity: 'low', page: '/', evidence: 'x' },
+			{ check: 'hidden-text', severity: 'high', page: '/about', evidence: 'y' }
+		]);
+		expect(s).toMatchObject({ word: 'Poor', tone: 'fail' });
+		expect(s.finding).toBe('2 findings across 6 pages; the worst is hidden text on /about.');
+	});
+
+	it('is Needs work on a medium finding and singular for one', () => {
+		const s = ok([{ check: 'duplicate', severity: 'medium', page: '/a', evidence: 'x' }]);
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toBe('1 finding across 6 pages; the worst is duplicate pages on /a.');
+	});
+
+	it('is Good on low-only findings but still names them', () => {
+		const s = ok([{ check: 'stale', severity: 'low', page: '/', evidence: 'x' }]);
+		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
+		expect(s.finding).toBe('1 finding across 6 pages; the worst is old habits on /.');
+	});
+
+	it('falls back to Measured when a finding has an unrecognised severity', () => {
+		const s = ok([{ check: 'stale', severity: 'critical', page: '/', evidence: 'x' }]);
+		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
+	});
+});

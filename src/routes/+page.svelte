@@ -24,7 +24,12 @@
 
 	const available: Array<{ id: AnalyzerId; label: string; note: string }> = [
 		{ id: 'lighthouse', label: 'Lighthouse', note: 'Performance, accessibility, SEO' },
-		{ id: 'keywords', label: 'Keywords', note: 'Meta keywords counted in page text' }
+		{ id: 'keywords', label: 'Keywords', note: 'Meta keywords counted in page text' },
+		{
+			id: 'oldseo',
+			label: 'Old SEO practices',
+			note: 'Hidden text, stuffing, cloaking, duplicate pages'
+		}
 	];
 
 	function toggle(id: AnalyzerId) {

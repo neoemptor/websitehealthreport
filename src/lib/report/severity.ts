@@ -1,4 +1,5 @@
 import type { AnalyzerId, AnalyzerResult } from '$lib/shared/types';
+import type { OldSeoData, OldSeoCheck } from '$lib/shared/oldseo';
 
 /**
  * The Building Inspection's defining device: every check opens with a
@@ -112,6 +113,66 @@ function keywordsSeverity(d: KeywordsData): Severity {
 	};
 }
 
+const CHECK_NAMES: Record<OldSeoCheck, string> = {
+	'hidden-text': 'hidden text',
+	'hidden-link': 'hidden links',
+	stuffing: 'keyword stuffing',
+	cloaking: 'cloaking',
+	duplicate: 'duplicate pages',
+	stale: 'old habits'
+};
+
+const OLD_SEO_CHECKS: OldSeoCheck[] = [
+	'hidden-text',
+	'hidden-link',
+	'stuffing',
+	'cloaking',
+	'duplicate',
+	'stale'
+];
+const OLD_SEO_SEVERITIES = ['high', 'medium', 'low'] as const;
+
+function isOldSeo(d: unknown): d is OldSeoData {
+	const o = d as OldSeoData | null;
+	return (
+		!!o &&
+		isNumber(o.pagesRead) &&
+		isNumber(o.pagesSkipped) &&
+		Array.isArray(o.findings) &&
+		o.findings.every(
+			(f) =>
+				typeof f?.page === 'string' &&
+				(OLD_SEO_SEVERITIES as readonly string[]).includes(f?.severity) &&
+				(OLD_SEO_CHECKS as readonly string[]).includes(f?.check)
+		)
+	);
+}
+
+const RANK = { high: 0, medium: 1, low: 2 } as const;
+
+function oldSeoSeverity(d: OldSeoData): Severity {
+	const pages = `${d.pagesRead} page${d.pagesRead === 1 ? '' : 's'}`;
+	if (d.findings.length === 0) {
+		return {
+			word: 'Good',
+			tone: 'ok',
+			finding: `No old or manipulative SEO practices found across ${pages}.`
+		};
+	}
+	const worst = [...d.findings].sort((a, b) => RANK[a.severity] - RANK[b.severity])[0];
+	const word =
+		worst.severity === 'high' ? 'Poor' : worst.severity === 'medium' ? 'Needs work' : 'Good';
+	const tone = worst.severity === 'high' ? 'fail' : worst.severity === 'medium' ? 'warn' : 'ok';
+	const count = `${d.findings.length} finding${d.findings.length === 1 ? '' : 's'}`;
+	return {
+		word,
+		tone,
+		finding: `${count} across ${pages}; the worst is ${
+			CHECK_NAMES[worst.check] ?? worst.check
+		} on ${worst.page}.`
+	};
+}
+
 export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): Severity {
 	if (!result) return { word: 'Not run', tone: 'na', finding: 'This check was not run.' };
 
@@ -136,6 +197,7 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 
 	if (id === 'lighthouse' && isLighthouse(result.data)) return lighthouseSeverity(result.data);
 	if (id === 'keywords' && isKeywords(result.data)) return keywordsSeverity(result.data);
+	if (id === 'oldseo' && isOldSeo(result.data)) return oldSeoSeverity(result.data);
 
 	// A check with no component yet, or data in an unexpected shape: say it
 	// measured, and let the raw values below carry the detail.

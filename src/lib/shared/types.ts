@@ -1,6 +1,7 @@
 export type AnalyzerId =
 	| 'lighthouse'
 	| 'keywords'
+	| 'oldseo'
 	| 'seoquake'
 	| 'wayback'
 	| 'security'

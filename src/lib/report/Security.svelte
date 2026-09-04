@@ -44,6 +44,19 @@
 			.join('-');
 	}
 
+	/** "1 day" / "2 days" — never a bare count in front of a noun. */
+	function plural(n: number, noun: string): string {
+		return `${n} ${noun}${n === 1 ? '' : 's'}`;
+	}
+
+	/** "expires in 12 days" while valid, "expired 12 days ago" (or "expired today") once past validTo. */
+	function expiryText(daysRemaining: number | null): string {
+		if (daysRemaining === null) return 'expires in ? days';
+		if (daysRemaining > 0) return `expires in ${plural(daysRemaining, 'day')}`;
+		if (daysRemaining === 0) return 'expired today';
+		return `expired ${plural(-daysRemaining, 'day')} ago`;
+	}
+
 	// data may be malformed (an unexpected shape reaching the report); never throw on it.
 	$: headers = Array.isArray(data?.headers) ? data.headers : [];
 	$: cookies = Array.isArray(data?.cookies) ? data.cookies : [];
@@ -76,7 +89,7 @@
 					<span class="block text-[10.5px] text-dark-500">Could not be inspected — {tlsError}</span>
 				{:else if tls}
 					<span class="block text-[10.5px] text-dark-500">
-						{tls.issuer ?? 'Unknown issuer'}, expires in {tls.daysRemaining ?? '?'} days
+						{tls.issuer ?? 'Unknown issuer'}, {expiryText(tls.daysRemaining)}
 						{#if tls.authorizationError}— {tls.authorizationError}{/if}
 					</span>
 				{/if}

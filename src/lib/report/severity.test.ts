@@ -149,7 +149,7 @@ describe('severityOf — oldseo', () => {
 
 	it('falls back to Measured when a finding has an unrecognised severity', () => {
 		const s = ok([{ check: 'stale', severity: 'critical', page: '/', evidence: 'x' }]);
-		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
+		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
 	});
 });
 
@@ -214,7 +214,32 @@ describe('severityOf — wayback', () => {
 				snapshotsByYear: [{ count: 4 }]
 			}
 		});
-		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
+		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
+	});
+
+	it('falls back to Measured when the year is not four digits', () => {
+		const s = severityOf('wayback', {
+			status: 'ok',
+			data: {
+				firstSeen: '2015-01-01',
+				lastSeen: '2018-06-01',
+				snapshotsByYear: [{ year: 'abc', count: 4 }]
+			}
+		});
+		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
+	});
+
+	it('uses "1 day" singular when only one day was captured', () => {
+		const thisYear = String(new Date().getFullYear());
+		const s = severityOf('wayback', {
+			status: 'ok',
+			data: {
+				firstSeen: '2019-01-01',
+				lastSeen: `${thisYear}-03-01`,
+				snapshotsByYear: [{ year: thisYear, count: 1 }]
+			}
+		});
+		expect(s.finding).toBe(`Archived since 2019, captured on 1 day in ${thisYear}.`);
 	});
 });
 
@@ -284,6 +309,27 @@ describe('severityOf — security', () => {
 		});
 	});
 
+	it('says "expired today" at exactly 0 days remaining', () => {
+		const s = ok({ tls: { ...base.tls, daysRemaining: 0 } });
+		expect(s.finding).toBe('The certificate expired today.');
+	});
+
+	it('says "expired N days ago" rather than a negative day count', () => {
+		const s = ok({ tls: { ...base.tls, daysRemaining: -12 } });
+		expect(s.finding).toBe('The certificate expired 12 days ago.');
+	});
+
+	it('does not throw on a security result whose header elements are malformed', () => {
+		const s = severityOf('security', {
+			status: 'ok',
+			data: {
+				...base,
+				headers: [{ present: false }]
+			}
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+	});
+
 	it('is Poor on a missing high-severity header, naming it first', () => {
 		const s = ok({
 			headers: [
@@ -322,6 +368,24 @@ describe('severityOf — security', () => {
 			]
 		});
 		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toBe('1 security header is missing, starting with X-Frame-Options.');
+	});
+
+	it('matches is/are for a missing medium-severity header, singular and plural', () => {
+		const one = ok({
+			headers: [
+				{ header: 'x-frame-options', present: false, value: null, severity: 'medium', note: '' }
+			]
+		});
+		expect(one.finding).toBe('1 security header is missing, starting with X-Frame-Options.');
+
+		const two = ok({
+			headers: [
+				{ header: 'x-frame-options', present: false, value: null, severity: 'medium', note: '' },
+				{ header: 'referrer-policy', present: false, value: null, severity: 'medium', note: '' }
+			]
+		});
+		expect(two.finding).toBe('2 security headers are missing, starting with X-Frame-Options.');
 	});
 
 	it('is Needs work when a cookie lacks Secure or HttpOnly', () => {
@@ -342,6 +406,11 @@ describe('severityOf — security', () => {
 	it('names the days remaining when that is the worst issue', () => {
 		const s = ok({ tls: { ...base.tls, daysRemaining: 12 } });
 		expect(s.finding).toBe('The certificate expires in 12 days.');
+	});
+
+	it('uses "1 day" singular when the certificate expires tomorrow', () => {
+		const s = ok({ tls: { ...base.tls, daysRemaining: 1 } });
+		expect(s.finding).toBe('The certificate expires in 1 day.');
 	});
 
 	it('stays Good with a finding about an uninspectable certificate', () => {
@@ -429,6 +498,6 @@ describe('severityOf — aeo', () => {
 
 	it('falls back to Measured when structuredData is empty', () => {
 		const s = severityOf('aeo', { status: 'ok', data: { ...base, structuredData: {} } });
-		expect(s).toEqual({ word: 'Measured', tone: 'ok', finding: 'See the readings below.' });
+		expect(s).toEqual({ word: 'Measured', tone: 'na', finding: 'See the readings below.' });
 	});
 });

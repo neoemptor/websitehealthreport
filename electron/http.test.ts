@@ -49,7 +49,22 @@ describe('fetchText', () => {
 			)
 		);
 		await expect(fetchText('https://example.com/', { timeoutMs: 20 })).rejects.toThrow(
-			'Timed out after 0s.'
+			'Timed out after 1s.'
+		);
+	});
+
+	it('never reports a timeout of 0s, even for a sub-second timeout', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(_url: string, init: RequestInit) =>
+					new Promise((_, reject) =>
+						init.signal?.addEventListener('abort', () => reject(new Error('aborted')))
+					)
+			)
+		);
+		await expect(fetchText('https://example.com/', { timeoutMs: 400 })).rejects.toThrow(
+			'Timed out after 1s.'
 		);
 	});
 

@@ -40,6 +40,8 @@ export function inspectTls(hostname: string, signal?: AbortSignal): Promise<TlsI
 		}
 
 		const socket = tls.connect(
+			// Always inspects port 443; a site served only on a non-standard port
+			// is out of scope for this check.
 			{ host: hostname, port: 443, servername: hostname, rejectUnauthorized: false },
 			() => {
 				try {

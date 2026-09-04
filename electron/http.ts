@@ -40,7 +40,7 @@ export async function fetchText(
 		};
 	} catch (err) {
 		if (timedOut) {
-			throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)}s.`);
+			throw new Error(`Timed out after ${Math.max(1, Math.round(timeoutMs / 1000))}s.`);
 		}
 		throw err;
 	} finally {

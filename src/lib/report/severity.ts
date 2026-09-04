@@ -49,6 +49,11 @@ type AeoData = {
 	jsDependencyRatio: number;
 };
 
+/** "1 day" / "2 days" — never a bare count in front of a noun. */
+function plural(n: number, noun: string): string {
+	return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
 /** Header name in Title-Case, for display in a finding sentence. */
 function headerTitle(header: string): string {
 	return header
@@ -240,7 +245,9 @@ function isWayback(d: unknown): d is WaybackData {
 		(w.firstSeen === null || typeof w.firstSeen === 'string') &&
 		(w.lastSeen === null || typeof w.lastSeen === 'string') &&
 		Array.isArray(w.snapshotsByYear) &&
-		w.snapshotsByYear.every((row) => typeof row?.year === 'string' && isNumber(row?.count))
+		w.snapshotsByYear.every(
+			(row) => typeof row?.year === 'string' && /^\d{4}$/.test(row.year) && isNumber(row?.count)
+		)
 	);
 }
 
@@ -266,7 +273,9 @@ function waybackSeverity(d: WaybackData): Severity {
 		return {
 			word: 'Good',
 			tone: 'ok',
-			finding: `Archived since ${firstYear}, captured on ${latest.count} days in ${latest.year}.`
+			finding: `Archived since ${firstYear}, captured on ${plural(latest.count, 'day')} in ${
+				latest.year
+			}.`
 		};
 	}
 
@@ -282,7 +291,14 @@ function isSecurity(d: unknown): d is SecurityData {
 	return (
 		!!s &&
 		Array.isArray(s.headers) &&
+		s.headers.every(
+			(h) =>
+				typeof h?.header === 'string' &&
+				typeof h?.present === 'boolean' &&
+				typeof h?.severity === 'string'
+		) &&
 		Array.isArray(s.cookies) &&
+		s.cookies.every((c) => typeof c?.name === 'string') &&
 		typeof s.tls === 'object' &&
 		s.tls !== null &&
 		typeof s.servedOverHttps === 'boolean'
@@ -304,7 +320,11 @@ function securitySeverity(d: SecurityData): Severity {
 		};
 	}
 	if (tls && tls.daysRemaining !== null && tls.daysRemaining <= 0) {
-		return { word: 'Poor', tone: 'fail', finding: 'The certificate has expired.' };
+		const finding =
+			tls.daysRemaining === 0
+				? 'The certificate expired today.'
+				: `The certificate expired ${plural(-tls.daysRemaining, 'day')} ago.`;
+		return { word: 'Poor', tone: 'fail', finding };
 	}
 
 	const missingHigh = d.headers.filter((h) => !h.present && h.severity === 'high');
@@ -324,7 +344,7 @@ function securitySeverity(d: SecurityData): Severity {
 			word: 'Needs work',
 			tone: 'warn',
 			finding: `${missingMedium.length} security header${
-				missingMedium.length === 1 ? '' : 's'
+				missingMedium.length === 1 ? ' is' : 's are'
 			} missing, starting with ${headerTitle(missingMedium[0].header)}.`
 		};
 	}
@@ -348,7 +368,7 @@ function securitySeverity(d: SecurityData): Severity {
 		return {
 			word: 'Needs work',
 			tone: 'warn',
-			finding: `The certificate expires in ${tls.daysRemaining} days.`
+			finding: `The certificate expires in ${plural(tls.daysRemaining, 'day')}.`
 		};
 	}
 
@@ -448,5 +468,5 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 
 	// A check with no component yet, or data in an unexpected shape: say it
 	// measured, and let the raw values below carry the detail.
-	return { word: 'Measured', tone: 'ok', finding: 'See the readings below.' };
+	return { word: 'Measured', tone: 'na', finding: 'See the readings below.' };
 }

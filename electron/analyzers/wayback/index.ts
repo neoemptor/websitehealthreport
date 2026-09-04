@@ -23,7 +23,10 @@ export const waybackAnalyzer: Analyzer<Record<string, never>> = {
 		url.searchParams.set('collapse', 'timestamp:8');
 		url.searchParams.set('filter', 'statuscode:200');
 
-		const { body } = await fetchText(url.toString(), { signal, timeoutMs: 25_000 });
+		const { status, body } = await fetchText(url.toString(), { signal, timeoutMs: 25_000 });
+		if (status !== 200) {
+			throw new Error(`The Internet Archive answered with status ${status}.`);
+		}
 		return parseCdx(body.trim().length === 0 ? [] : JSON.parse(body));
 	}
 };

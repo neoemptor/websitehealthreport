@@ -40,7 +40,7 @@ jobs:
           npm test
 
       - name: Build
-        run: npm run app:build
+        run: npm run build && npm run electron:compile && npx electron-builder --publish never
         env:
           # Unsigned builds: no certificate is configured. macOS builds are
           # therefore not notarised and need a right-click Open on first run.

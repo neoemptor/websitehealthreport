@@ -93,16 +93,16 @@
 
 <!-- The summary: the verdict before the evidence. A reader who stops here
      knows where the client stands; everything beneath is the working. -->
-<section class="mt-8 break-inside-avoid">
-	<h2 class="font-heading text-[19px] font-bold text-primary-800">Summary</h2>
+<section class="mt-8">
+	<h2 class="font-heading text-[19px] font-bold text-primary-800 break-after-avoid">Summary</h2>
 	{#if client}
-		<p class="mt-1.5 text-[13px] leading-relaxed text-dark-700">{sentence()}</p>
+		<p class="mt-1.5 text-[13px] leading-relaxed text-dark-700 break-after-avoid">{sentence()}</p>
 	{/if}
 
 	<div class="mt-3 overflow-x-auto print:overflow-visible">
 		<table class="w-full border-collapse text-left">
 			<thead>
-				<tr class="border-b border-dark-200">
+				<tr class="border-b border-dark-200 break-after-avoid">
 					<th
 						class="w-[34%] py-1.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-dark-500"
 					>
@@ -137,7 +137,7 @@
 						{/each}
 					</tr>
 				{/each}
-				<tr class="break-inside-avoid">
+				<tr class="break-inside-avoid break-before-avoid">
 					<td class="py-2 pr-1 align-top text-[12px] text-dark-700">Grade</td>
 					{#each ordered as row (row.domain)}
 						<td

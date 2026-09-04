@@ -8,6 +8,7 @@
 	import OldSeo from '$lib/report/OldSeo.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
+	import Summary from '$lib/report/Summary.svelte';
 	import { severityOf } from '$lib/report/severity';
 
 	// Analyzers without a component fall back to their raw values, so adding one
@@ -189,6 +190,10 @@
 					<dd class="text-[11px] text-dark-500">the check ran and could not complete</dd>
 				</div>
 			</dl>
+
+			{#if run.domains.length > 0}
+				<Summary {run} {analyzerName} />
+			{/if}
 
 			<!-- Domains flow continuously rather than one per page. A section is
 			     therefore free to split across a page boundary — deliberately: the

@@ -28,4 +28,40 @@ describe('parseToolbar', () => {
 	it('keeps the raw cells so a layout change can be diagnosed', () => {
 		expect(parseToolbar(['a', 'b']).raw).toEqual(['a', 'b']);
 	});
+
+	it('parses a plain integer', () => {
+		expect(parseToolbar(['12']).googleIndex).toBe(12);
+	});
+
+	it('parses a space-separated integer', () => {
+		expect(parseToolbar(['1 234']).googleIndex).toBe(1234);
+	});
+
+	it('treats a dot as a thousands separator only when followed by exactly three digits', () => {
+		expect(parseToolbar(['1.234']).googleIndex).toBe(1234);
+	});
+
+	it('parses a K-abbreviated decimal', () => {
+		expect(parseToolbar(['1.2K']).googleIndex).toBe(1200);
+	});
+
+	it('parses an M-abbreviated decimal', () => {
+		expect(parseToolbar(['3.4M']).googleIndex).toBe(3400000);
+	});
+
+	it('parses a B-abbreviated whole number', () => {
+		expect(parseToolbar(['2B']).googleIndex).toBe(2000000000);
+	});
+
+	it('parses abbreviated suffixes case-insensitively', () => {
+		expect(parseToolbar(['1.2k']).googleIndex).toBe(1200);
+	});
+
+	it('returns null for empty, dash-like, and unknown-suffix values', () => {
+		expect(parseToolbar(['']).googleIndex).toBeNull();
+		expect(parseToolbar(['-']).googleIndex).toBeNull();
+		expect(parseToolbar(['—']).googleIndex).toBeNull();
+		expect(parseToolbar(['1.2X']).googleIndex).toBeNull();
+		expect(parseToolbar(['5pts']).googleIndex).toBeNull();
+	});
 });

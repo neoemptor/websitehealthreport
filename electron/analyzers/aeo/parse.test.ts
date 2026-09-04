@@ -20,6 +20,19 @@ describe('parseRobotsForAiCrawlers', () => {
 	it('reports one rule per known AI crawler', () => {
 		expect(parseRobotsForAiCrawlers('')).toHaveLength(AI_CRAWLERS.length);
 	});
+
+	it('blocks a crawler with no group of its own when the wildcard group disallows /', () => {
+		const rules = parseRobotsForAiCrawlers('User-agent: *\nDisallow: /');
+		expect(rules.every((r) => !r.allowed)).toBe(true);
+	});
+
+	it('lets a specific group override a disallowing wildcard group', () => {
+		const rules = parseRobotsForAiCrawlers(
+			'User-agent: *\nDisallow: /\n\nUser-agent: GPTBot\nAllow: /'
+		);
+		expect(rules.find((r) => r.agent === 'GPTBot')?.allowed).toBe(true);
+		expect(rules.find((r) => r.agent === 'ClaudeBot')?.allowed).toBe(false);
+	});
 });
 
 describe('parseStructuredData', () => {
@@ -35,6 +48,24 @@ describe('parseStructuredData', () => {
 
 	it('returns zeroes when there is no structured data', () => {
 		expect(parseStructuredData('<p>hi</p>')).toEqual({ blocks: 0, valid: 0, types: [] });
+	});
+
+	it('descends into @graph arrays', () => {
+		const html = `<script type="application/ld+json">{"@graph":[{"@type":"LocalBusiness"},{"@type":"WebSite"}]}</script>`;
+		expect(parseStructuredData(html)).toEqual({
+			blocks: 1,
+			valid: 1,
+			types: ['LocalBusiness', 'WebSite']
+		});
+	});
+
+	it('accepts @type given as an array', () => {
+		const html = `<script type="application/ld+json">{"@type":["LocalBusiness","Store"]}</script>`;
+		expect(parseStructuredData(html)).toEqual({
+			blocks: 1,
+			valid: 1,
+			types: ['LocalBusiness', 'Store']
+		});
 	});
 });
 

@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+	/* `slate` here is this project's own flat colour, not Tailwind's slate-N
+	   scale — defining it replaces that scale, so slate-100 and friends do not
+	   exist. Body text colour is set on body below. */
+	html {
+		@apply bg-ink;
+	}
+
+	body {
+		@apply font-sans text-[13.5px] leading-relaxed text-[#C9D1D9] antialiased;
+	}
+
+	/* Keyboard focus stays visible everywhere. Tailwind's preflight removes the
+	   browser default, and this is a tool driven largely from the keyboard. */
+	:focus-visible {
+		@apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-ink;
+	}
+}
+
+@layer components {
+	/* The status chip is the one device shared by the live grid and the printed
+	   report. Glyph plus word plus colour — never colour alone, because these
+	   reports get printed in black and white. */
+	.chip {
+		@apply inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] uppercase tracking-wide;
+	}
+
+	.chip::before {
+		@apply text-[13px] leading-none;
+		content: attr(data-glyph);
+	}
+
+	.field-label {
+		@apply mb-1.5 block text-[11px] font-medium uppercase tracking-[0.08em] text-[#8B949E];
+	}
+
+	.field {
+		@apply w-full rounded-sm border border-steel bg-slate px-3 py-2 font-mono text-[13px] text-[#E6EDF3] placeholder:text-[#6E7681];
+	}
+
+	.field:focus {
+		@apply border-accent outline-none;
+	}
+
+	.btn {
+		@apply rounded-sm px-4 py-2 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40;
+	}
+
+	.btn-primary {
+		@apply bg-accent text-white hover:bg-[#14757E];
+	}
+
+	.btn-quiet {
+		@apply border border-steel text-[#C9D1D9] hover:border-[#5A6673] hover:text-white;
+	}
+}
+
+/* ---------------------------------------------------------------------------
+   Print. The report route is rendered to PDF by electron/pdf.ts, so this is
+   not a courtesy stylesheet — it is how the client-facing deliverable looks.
+   The screen chrome disappears and the document takes over the page.
+   --------------------------------------------------------------------------- */
+@media print {
+	html,
+	body {
+		@apply bg-white text-ink;
+		font-size: 10.5pt;
+	}
+
+	.screen-only {
+		display: none !important;
+	}
+
+	@page {
+		size: A4;
+		/* Room for the footer electron/pdf.ts injects on every page. */
+		margin: 16mm 16mm 20mm 16mm;
+	}
+}

@@ -14,6 +14,24 @@ export type ExportOptions = {
 const READY_TIMEOUT_MS = 60_000;
 const POLL_INTERVAL_MS = 100;
 
+/**
+ * Repeated on every page of the exported PDF.
+ *
+ * Chromium renders this in an isolated context with its own tiny default font
+ * size and no access to the page's stylesheet, so every rule has to be inline
+ * and the size stated explicitly. `date` and `pageNumber`/`totalPages` are
+ * substituted by Chromium.
+ */
+const FOOTER_TEMPLATE = `
+	<div style="width:100%;margin:0 12mm;padding-top:4mm;border-top:0.5pt solid #D8D5CE;
+	            font-family:Georgia,'Times New Roman',serif;font-size:7.5pt;color:#6B6659;
+	            display:flex;justify-content:space-between;">
+		<span>D S Bailey Freelancer</span>
+		<span class="date"></span>
+		<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+	</div>
+`;
+
 type ReportState = { state: string | null; error: string | null } | null;
 
 /**
@@ -89,6 +107,13 @@ export async function exportRunPdf(opts: ExportOptions): Promise<string> {
 		const pdf = await window.webContents.printToPDF({
 			printBackground: true,
 			pageSize: 'A4',
+			// Chromium only repeats page furniture when it is supplied here. A
+			// position:fixed footer in the page renders once, not per page, so the
+			// footer lives in the print options rather than in the Svelte route —
+			// the one place where screen and PDF deliberately differ.
+			displayHeaderFooter: true,
+			headerTemplate: '<div></div>',
+			footerTemplate: FOOTER_TEMPLATE,
 			// top/bottom/left/right are only honoured when marginType is
 			// 'custom' — without it they're silently ignored. Electron's types
 			// say these are pixels, but at runtime, with a named pageSize preset

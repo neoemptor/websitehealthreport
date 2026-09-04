@@ -86,7 +86,7 @@ beforeEach(() => {
 
 describe('content preflight', () => {
 	it('reports unavailable when the Chromium binary is not on disk', async () => {
-		state.executablePath = 'C:definitely\notherechrome.exe';
+		state.executablePath = 'C:/definitely/not-here/chrome.exe';
 
 		const result = await contentAnalyzer.preflight(contentAnalyzer.defaultSettings);
 
@@ -110,6 +110,19 @@ describe('content analyze', () => {
 			status: 'unavailable',
 			reason: 'Grammar checking is switched off in settings.'
 		});
+		expect(checkGrammar).not.toHaveBeenCalled();
+	});
+
+	it('treats a settings.content block with no grammar section as provider off', async () => {
+		state.launch = async () => readyBrowser('Some page text.');
+
+		const data = await contentAnalyzer.analyze(
+			'https://example.com/',
+			{ ignoreWords: [] } as unknown as Parameters<typeof contentAnalyzer.analyze>[1],
+			new AbortController().signal
+		);
+
+		expect(data.grammar.status).toBe('unavailable');
 		expect(checkGrammar).not.toHaveBeenCalled();
 	});
 

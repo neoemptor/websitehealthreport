@@ -61,6 +61,10 @@ export function parseLanguageTool(payload: unknown): GrammarFinding[] {
 	}
 
 	return (matches as LanguageToolMatch[]).map((match) => {
+		if (!match.context || typeof match.context.text !== 'string') {
+			throw new Error('LanguageTool response contained a malformed match context.');
+		}
+
 		const { text, offset, length } = match.context;
 		if (
 			!Number.isInteger(offset) ||

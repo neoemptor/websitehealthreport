@@ -100,6 +100,26 @@ describe('parseLanguageTool', () => {
 		};
 		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
 	});
+
+	it('throws when a match has no context object', () => {
+		const payload = {
+			matches: [{ message: 'Possible typo', rule: { id: 'TYPO' } }]
+		};
+		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
+	});
+
+	it('throws when context.text is not a string', () => {
+		const payload = {
+			matches: [
+				{
+					message: 'Possible typo',
+					context: { text: 123, offset: 0, length: 1 },
+					rule: { id: 'TYPO' }
+				}
+			]
+		};
+		expect(() => parseLanguageTool(payload)).toThrow(/malformed/i);
+	});
 });
 
 describe('checkGrammar', () => {

@@ -487,14 +487,21 @@ function seoQuakeSeverity(d: SeoQuakeData): Severity {
 
 	const rankPart =
 		d.semrushRank === null ? null : `Semrush rank ${d.semrushRank.toLocaleString('en-AU')}`;
+	// Backlinks and linking domains are reported independently: SEO Quake can
+	// surface one without the other, and a missing domain count must never
+	// suppress a backlink figure that was actually read (or vice versa).
 	const backlinksPart =
-		d.backlinks === null || d.linkingDomains === null
+		d.backlinks === null
 			? 'backlinks not reported'
-			: `${d.backlinks.toLocaleString('en-AU')} backlinks from ${d.linkingDomains.toLocaleString(
-					'en-AU'
-			  )} domains`;
+			: `${d.backlinks.toLocaleString('en-AU')} backlinks`;
+	const backlinksWithDomains =
+		d.linkingDomains === null
+			? backlinksPart
+			: `${backlinksPart} from ${d.linkingDomains.toLocaleString('en-AU')} domains`;
 
-	const finding = [rankPart, backlinksPart].filter((p): p is string => p !== null).join('; ');
+	const finding = [rankPart, backlinksWithDomains]
+		.filter((p): p is string => p !== null)
+		.join('; ');
 
 	return {
 		word: 'Measured',
@@ -530,8 +537,16 @@ function contentSeverity(d: ContentData): Severity {
 	if (misspellingCount > 0) parts.push(plural(misspellingCount, 'misspelling'));
 	if (grammarFindings > 0) parts.push(plural(grammarFindings, 'grammar issue'));
 
-	let finding =
-		parts.length > 0 ? `${parts.join(' and ')} found.` : 'No misspellings or grammar issues found.';
+	let finding: string;
+	if (parts.length > 0) {
+		finding = `${parts.join(' and ')} found.`;
+	} else if (grammarUnavailable) {
+		// Grammar never ran, so the sentence must never imply it was clear —
+		// only misspellings were actually checked here.
+		finding = 'No misspellings found.';
+	} else {
+		finding = 'No misspellings or grammar issues found.';
+	}
 	if (grammarUnavailable) finding += ' Grammar was not checked.';
 
 	if (misspellingCount >= CONTENT_POOR_THRESHOLD || grammarFindings >= CONTENT_POOR_THRESHOLD) {

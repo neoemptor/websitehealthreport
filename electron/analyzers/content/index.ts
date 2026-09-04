@@ -64,7 +64,10 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
 		const aborted = rejectOnAbort(signal);
 
 		try {
-			return await Promise.race([scrape(browser, domain, settings, signal), aborted.promise]);
+			return await Promise.race([
+				scrape(browser, domain, settings, signal, close),
+				aborted.promise
+			]);
 		} finally {
 			aborted.dispose();
 			signal.removeEventListener('abort', onAbort);
@@ -77,8 +80,10 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
  * Words drawn from the site's own hostname (e.g. "cjsgaragedoors" from
  * cjsgaragedoors.com.au) are business names, not misspellings, so they are
  * added to the ignore list for this run only — settings.ignoreWords is left
- * untouched. TLD-shaped parts (under 3 letters, like "com" or "au") are
- * dropped rather than flagged as words to ignore.
+ * untouched. The hostname is split on both dots and hyphens, so a hyphenated
+ * domain (e.g. "cjs-garage-doors.com") contributes each part on its own.
+ * Parts shorter than 3 characters are dropped as TLD-shaped noise — "au"
+ * goes, "com" stays.
  */
 function hostnameWords(domain: string): string[] {
 	let hostname: string;
@@ -98,7 +103,8 @@ async function scrape(
 	browser: Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>,
 	domain: string,
 	settings: ContentSettings,
-	signal: AbortSignal
+	signal: AbortSignal,
+	closeBrowser: () => Promise<void>
 ): Promise<ContentData> {
 	let text = '';
 	const page = await browser.newPage();
@@ -111,18 +117,33 @@ async function scrape(
 		await page.close();
 	}
 
+	// The page text is all Chrome was needed for — spelling is local and
+	// grammar is an HTTP call, so the browser is closed here rather than held
+	// open (via the outer `finally`) for the rest of this function. `close` is
+	// wrapped in `once`, so this and the outer teardown never double-close.
+	await closeBrowser();
+
 	const checker = await createSpellChecker();
 	const ignoreWords = [...settings.ignoreWords, ...hostnameWords(domain)];
 	const misspellings = checker.check(extractWords(text), ignoreWords);
+
+	// A stored settings.content block saved before grammar support existed (or
+	// otherwise missing the field) must behave as provider "off", not throw —
+	// so both fields are read defensively rather than assuming settings.grammar
+	// exists.
+	const grammarSettings: GrammarSettings = {
+		provider: settings.grammar?.provider ?? 'off',
+		endpoint: settings.grammar?.endpoint
+	};
 
 	// Spelling never depends on the grammar provider: a provider switched off
 	// is reported directly rather than going through checkGrammar, and any
 	// other failure (unreachable server, bad response) never costs the
 	// spelling results above.
 	const grammar: GrammarState =
-		settings.grammar.provider === 'off'
+		grammarSettings.provider === 'off'
 			? { status: 'unavailable', reason: 'Grammar checking is switched off in settings.' }
-			: await checkGrammar(text.slice(0, MAX_GRAMMAR_CHARS), settings.grammar, signal);
+			: await checkGrammar(text.slice(0, MAX_GRAMMAR_CHARS), grammarSettings, signal);
 
 	return { spelling: { misspellings }, grammar };
 }

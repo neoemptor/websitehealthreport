@@ -148,6 +148,9 @@
 							class="field"
 							placeholder="http://localhost:8081/v2/check"
 						/>
+						<p role="note" class="mt-2 text-[12px] text-white/50">
+							Your client's page content is sent to this server.
+						</p>
 					</div>
 				{/if}
 

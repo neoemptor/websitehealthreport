@@ -537,6 +537,16 @@ describe('severityOf — seoquake', () => {
 		const s = severityOf('seoquake', ok({ semrushRank: 100 }));
 		expect(s.finding).toBe('Semrush rank 100; backlinks not reported.');
 	});
+
+	it('reports backlinks alone when linkingDomains is missing', () => {
+		const s = severityOf('seoquake', ok({ semrushRank: 100, backlinks: 213 }));
+		expect(s.finding).toBe('Semrush rank 100; 213 backlinks.');
+	});
+
+	it('reports backlinks not reported with a domain count when only linkingDomains is present', () => {
+		const s = severityOf('seoquake', ok({ semrushRank: 100, linkingDomains: 435 }));
+		expect(s.finding).toBe('Semrush rank 100; backlinks not reported from 435 domains.');
+	});
 });
 
 describe('severityOf — content', () => {
@@ -619,6 +629,11 @@ describe('severityOf — content', () => {
 	it('notes grammar was not checked when unavailable', () => {
 		const s = severityOf('content', ok([], { status: 'unavailable', reason: 'Turned off.' }));
 		expect(s.finding).toMatch(/Grammar was not checked\.$/);
+	});
+
+	it('never claims grammar was clear when it was not run', () => {
+		const s = severityOf('content', ok([], { status: 'unavailable', reason: 'Turned off.' }));
+		expect(s.finding).toBe('No misspellings found. Grammar was not checked.');
 	});
 
 	it('falls back to Measured when grammar is ok but findings is not an array', () => {

@@ -44,6 +44,16 @@
 			id: 'aeo',
 			label: 'AI Agent Optimisation',
 			note: 'Can AI crawlers read the site without JavaScript'
+		},
+		{
+			id: 'seoquake',
+			label: 'SEO Quake',
+			note: 'Semrush rank, backlinks and linking domains from the browser extension'
+		},
+		{
+			id: 'content',
+			label: 'Spelling and grammar',
+			note: 'Australian English spelling offline; grammar only if switched on in settings'
 		}
 	];
 

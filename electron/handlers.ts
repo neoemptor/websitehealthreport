@@ -7,6 +7,8 @@ import { oldSeoAnalyzer } from './analyzers/oldseo';
 import { waybackAnalyzer } from './analyzers/wayback';
 import { securityAnalyzer } from './analyzers/security';
 import { aeoAnalyzer } from './analyzers/aeo';
+import { seoQuakeAnalyzer } from './analyzers/seoquake';
+import { contentAnalyzer } from './analyzers/content';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -51,7 +53,9 @@ export function buildHandlers(deps: HandlerDeps) {
 		oldSeoAnalyzer,
 		waybackAnalyzer,
 		securityAnalyzer,
-		aeoAnalyzer
+		aeoAnalyzer,
+		seoQuakeAnalyzer,
+		contentAnalyzer
 	]);
 	const storage = new RunStorage(deps.userDataDir);
 	const settingsStore = new SettingsStore(deps.userDataDir);

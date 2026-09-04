@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CredentialStore } from '../../credentials';
 
 const state = vi.hoisted(() => ({
 	accessToken: vi.fn(async () => 'access-token'),
@@ -37,10 +38,7 @@ beforeEach(() => {
 const CLIENT_ID_KEY = 'google.clientId';
 const CLIENT_SECRET_KEY = 'google.clientSecret';
 
-type FakeStore = {
-	has: (key: string) => Promise<boolean>;
-	get: (key: string) => Promise<string | null>;
-};
+type FakeStore = Pick<CredentialStore, 'get' | 'set' | 'has' | 'remove'>;
 
 function fakeStore(overrides: Record<string, string> = {}): FakeStore {
 	const store: Record<string, string> = {
@@ -50,12 +48,23 @@ function fakeStore(overrides: Record<string, string> = {}): FakeStore {
 	};
 	return {
 		has: async (key: string) => Object.prototype.hasOwnProperty.call(store, key),
-		get: async (key: string) => store[key] ?? null
-	};
+		get: async (key: string) => store[key] ?? null,
+		set: async (key: string, value: string) => {
+			store[key] = value;
+		},
+		remove: async (key: string) => {
+			delete store[key];
+		}
+	} as FakeStore;
 }
 
 function noCredentialsStore(): FakeStore {
-	return { has: async () => false, get: async () => null };
+	return {
+		has: async () => false,
+		get: async () => null,
+		set: async () => {},
+		remove: async () => {}
+	} as FakeStore;
 }
 
 const settings = { ga4PropertyId: 'properties/123', days: 90 };
@@ -68,11 +77,7 @@ function isClient(domain: string): boolean {
 
 describe('traffic-owned preflight', () => {
 	it('reports unavailable when Google client credentials are not stored', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			noCredentialsStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(noCredentialsStore() as CredentialStore, isClient);
 		expect(await analyzer.preflight(settings)).toEqual({
 			available: false,
 			reason: 'Google has not been set up in Settings.'
@@ -80,22 +85,14 @@ describe('traffic-owned preflight', () => {
 	});
 
 	it('reports available when Google client credentials are stored', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		expect(await analyzer.preflight(settings)).toEqual({ available: true });
 	});
 });
 
 describe('traffic-owned analyze', () => {
 	it('throws UNAVAILABLE for a competitor domain', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(COMPETITOR_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/^UNAVAILABLE: Owned traffic is only available for the client's own site/
@@ -104,11 +101,7 @@ describe('traffic-owned analyze', () => {
 	});
 
 	it('assembles data when both sources are ok', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -127,11 +120,7 @@ describe('traffic-owned analyze', () => {
 	});
 
 	it('reports GA4 as unavailable with no property id, while GSC still runs', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(
 			CLIENT_DOMAIN,
@@ -153,11 +142,7 @@ describe('traffic-owned analyze', () => {
 				'UNAVAILABLE: The connected Google account does not have access to this site in Search Console.'
 			)
 		);
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		const result = await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -168,15 +153,29 @@ describe('traffic-owned analyze', () => {
 		expect(result.ga4.status).toBe('ok');
 	});
 
+	it('rethrows a non-UNAVAILABLE Search Console error so the cell reports failed', async () => {
+		state.fetchSearchAnalytics.mockRejectedValueOnce(new Error('boom'));
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const controller = new AbortController();
+		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
+			/boom/
+		);
+	});
+
+	it('rethrows a non-UNAVAILABLE GA4 error so the cell reports failed', async () => {
+		state.fetchGa4.mockRejectedValueOnce(new Error('boom'));
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
+		const controller = new AbortController();
+		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
+			/boom/
+		);
+	});
+
 	it('throws the connection UNAVAILABLE (not a nested unavailable) when not connected', async () => {
 		state.accessToken.mockRejectedValueOnce(
 			new Error("UNAVAILABLE: This site's Google account has not been connected in Settings.")
 		);
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		await expect(analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal)).rejects.toThrow(
 			/^UNAVAILABLE: This site's Google account has not been connected/
@@ -186,11 +185,7 @@ describe('traffic-owned analyze', () => {
 	});
 
 	it('passes the abort signal through to both Google clients', async () => {
-		const analyzer = createTrafficOwnedAnalyzer(
-			fakeStore() as never,
-			{ clientId: 'id', clientSecret: 'secret' },
-			isClient
-		);
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient);
 		const controller = new AbortController();
 		await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
 
@@ -213,5 +208,50 @@ describe('traffic-owned analyze', () => {
 			expect.anything(),
 			controller.signal
 		);
+	});
+
+	it('computes a 90-day range ending yesterday UTC from an injected now', async () => {
+		const now = new Date('2026-09-04T12:00:00.000Z');
+		const analyzer = createTrafficOwnedAnalyzer(fakeStore() as CredentialStore, isClient, {
+			now: () => now
+		});
+		const controller = new AbortController();
+		const result = await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
+
+		expect(result.range).toEqual({ start: '2026-06-05', end: '2026-09-03' });
+		expect(state.fetchSearchAnalytics).toHaveBeenCalledWith(
+			CLIENT_DOMAIN,
+			'access-token',
+			{ startDate: '2026-06-05', endDate: '2026-09-03' },
+			controller.signal
+		);
+		expect(state.fetchGa4).toHaveBeenCalledWith(
+			'properties/123',
+			'access-token',
+			{ startDate: '2026-06-05', endDate: '2026-09-03' },
+			controller.signal
+		);
+	});
+
+	it('never leaks the client secret or tokens in a nested reason or thrown message', async () => {
+		const secret = 'super-secret-value-12345';
+		state.accessToken.mockRejectedValueOnce(
+			new Error(`UNAVAILABLE: token refresh failed for ${secret}`)
+		);
+		const analyzer = createTrafficOwnedAnalyzer(
+			fakeStore({ [CLIENT_SECRET_KEY]: secret }) as CredentialStore,
+			isClient
+		);
+		const controller = new AbortController();
+
+		let thrown: unknown;
+		try {
+			await analyzer.analyze(CLIENT_DOMAIN, settings, controller.signal);
+		} catch (error) {
+			thrown = error;
+		}
+
+		expect(thrown).toBeInstanceOf(Error);
+		expect((thrown as Error).message).not.toContain(secret);
 	});
 });

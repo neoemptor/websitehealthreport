@@ -18,23 +18,38 @@ export type OwnedTrafficData = {
 	range: { start: string; end: string };
 };
 
-export type OauthConfig = { clientId: string; clientSecret: string };
-
 const GOOGLE_CLIENT_ID_KEY = 'google.clientId';
 const GOOGLE_CLIENT_SECRET_KEY = 'google.clientSecret';
 
-function dateRange(days: number): DateRange {
-	const end = new Date();
+function dateRange(days: number, now: Date = new Date()): DateRange {
+	const end = new Date(now.getTime() - 86_400_000);
 	const start = new Date(end.getTime() - days * 86_400_000);
 	const iso = (d: Date): string => d.toISOString().slice(0, 10);
 	return { startDate: iso(start), endDate: iso(end) };
 }
 
-// UNAVAILABLE errors are user-facing reasons, not internal detail, so the
-// prefix is stripped once here rather than at every call site.
-function reasonOf(error: unknown): string {
+const UNAVAILABLE_PREFIX = /^UNAVAILABLE:\s*/;
+
+// Defence in depth: neither the Google client secret nor a bearer token
+// should ever reach a user-facing message, but errors can originate from
+// several layers (Google's own API, the OAuth token endpoint). Scrubbing
+// here means a secret leaking through any one of them still can't surface.
+function scrubSecrets(message: string, secrets: Array<string | null | undefined>): string {
+	return secrets
+		.filter((secret): secret is string => !!secret)
+		.reduce((msg, secret) => msg.split(secret).join('[redacted]'), message);
+}
+
+// Only an UNAVAILABLE-tagged error is a per-source condition the report can
+// present as "this source isn't available"; anything else is an unexpected
+// failure and must propagate so the whole cell reports failed rather than
+// silently nesting an unrelated bug as a source reason.
+function unavailableReasonOf(error: unknown, secrets: Array<string | null | undefined>): string {
 	const message = error instanceof Error ? error.message : String(error);
-	return message.replace(/^UNAVAILABLE:\s*/, '');
+	if (!UNAVAILABLE_PREFIX.test(message)) {
+		throw error;
+	}
+	return scrubSecrets(message.replace(UNAVAILABLE_PREFIX, ''), secrets);
 }
 
 /**
@@ -43,11 +58,14 @@ function reasonOf(error: unknown): string {
  * client apart from a competitor. `isClient` is that dependency, wired by the
  * run orchestrator rather than passed through settings.
  */
+export type TrafficOwnedDeps = { now?: () => Date };
+
 export function createTrafficOwnedAnalyzer(
 	credentials: CredentialStore,
-	oauth: OauthConfig,
-	isClient: (domain: string) => boolean
+	isClient: (domain: string) => boolean,
+	deps: TrafficOwnedDeps = {}
 ): Analyzer<TrafficOwnedSettings> {
+	const now = deps.now ?? ((): Date => new Date());
 	return {
 		id: 'traffic-owned',
 		label: 'Traffic (owned)',
@@ -78,12 +96,18 @@ export function createTrafficOwnedAnalyzer(
 				throw new Error('UNAVAILABLE: Google has not been set up in Settings.');
 			}
 
-			const range = dateRange(settings.days);
+			const range = dateRange(settings.days, now());
 
 			// If the connection itself is the problem (not connected, or expired),
 			// this throws straight out of analyze so the whole cell reads
 			// unavailable, rather than reporting two independently-empty sources.
-			const token = await accessTokenFor(domain, credentials, clientId, clientSecret, signal);
+			let token: string;
+			try {
+				token = await accessTokenFor(domain, credentials, clientId, clientSecret, signal);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				throw new Error(scrubSecrets(message, [clientSecret]));
+			}
 
 			// Either source may fail on its own without costing the other, so each
 			// is captured independently once a token is in hand.
@@ -94,7 +118,10 @@ export function createTrafficOwnedAnalyzer(
 					data: await fetchSearchAnalytics(domain, token, range, signal)
 				};
 			} catch (error) {
-				searchConsole = { status: 'unavailable', reason: reasonOf(error) };
+				searchConsole = {
+					status: 'unavailable',
+					reason: unavailableReasonOf(error, [clientSecret, token])
+				};
 			}
 
 			let ga4: SourceResult<Ga4Data>;
@@ -110,7 +137,10 @@ export function createTrafficOwnedAnalyzer(
 						data: await fetchGa4(settings.ga4PropertyId, token, range, signal)
 					};
 				} catch (error) {
-					ga4 = { status: 'unavailable', reason: reasonOf(error) };
+					ga4 = {
+						status: 'unavailable',
+						reason: unavailableReasonOf(error, [clientSecret, token])
+					};
 				}
 			}
 

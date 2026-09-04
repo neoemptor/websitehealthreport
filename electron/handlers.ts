@@ -4,6 +4,9 @@ import { createRegistry } from './analyzers/registry';
 import { lighthouseAnalyzer } from './analyzers/lighthouse';
 import { keywordsAnalyzer } from './analyzers/keywords';
 import { oldSeoAnalyzer } from './analyzers/oldseo';
+import { waybackAnalyzer } from './analyzers/wayback';
+import { securityAnalyzer } from './analyzers/security';
+import { aeoAnalyzer } from './analyzers/aeo';
 import { assertRunId } from './run/id';
 import { Orchestrator } from './run/orchestrator';
 import { RunStorage } from './run/storage';
@@ -42,7 +45,14 @@ export type StartRunInput = {
 };
 
 export function buildHandlers(deps: HandlerDeps) {
-	const registry = createRegistry([lighthouseAnalyzer, keywordsAnalyzer, oldSeoAnalyzer]);
+	const registry = createRegistry([
+		lighthouseAnalyzer,
+		keywordsAnalyzer,
+		oldSeoAnalyzer,
+		waybackAnalyzer,
+		securityAnalyzer,
+		aeoAnalyzer
+	]);
 	const storage = new RunStorage(deps.userDataDir);
 	const settingsStore = new SettingsStore(deps.userDataDir);
 	const orchestrator = new Orchestrator(registry, storage, deps.emitProgress);

@@ -6,6 +6,9 @@
 	import Lighthouse from '$lib/report/Lighthouse.svelte';
 	import Keywords from '$lib/report/Keywords.svelte';
 	import OldSeo from '$lib/report/OldSeo.svelte';
+	import Wayback from '$lib/report/Wayback.svelte';
+	import Security from '$lib/report/Security.svelte';
+	import Aeo from '$lib/report/Aeo.svelte';
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
 	import Summary from '$lib/report/Summary.svelte';
@@ -22,7 +25,10 @@
 	const components: Partial<Record<AnalyzerId, ComponentType>> = {
 		lighthouse: Lighthouse,
 		keywords: Keywords,
-		oldseo: OldSeo
+		oldseo: OldSeo,
+		wayback: Wayback,
+		security: Security,
+		aeo: Aeo
 	};
 
 	let run: Run | null = null;
@@ -73,7 +79,9 @@
 		content: 'Spelling and grammar',
 		'traffic-owned': 'Traffic (measured)',
 		'traffic-estimated': 'Traffic (estimated)',
-		oldseo: 'Old SEO practices'
+		oldseo: 'Old SEO practices',
+		wayback: 'Wayback history',
+		security: 'Security'
 	};
 
 	function analyzerName(id: string): string {

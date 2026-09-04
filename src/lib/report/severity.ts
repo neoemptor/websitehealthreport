@@ -1,6 +1,71 @@
 import type { AnalyzerId, AnalyzerResult } from '$lib/shared/types';
 import type { OldSeoData, OldSeoCheck } from '$lib/shared/oldseo';
 
+type WaybackData = {
+	firstSeen: string | null;
+	lastSeen: string | null;
+	snapshotsByYear: Array<{ year: string; count: number }>;
+};
+
+type SecurityHeaderFinding = {
+	header: string;
+	present: boolean;
+	value: string | null;
+	severity: 'high' | 'medium' | 'low';
+	note: string;
+};
+
+type SecurityCookieFinding = {
+	name: string;
+	secure: boolean;
+	httpOnly: boolean;
+	sameSite: string | null;
+};
+
+type SecurityTls =
+	| {
+			protocol: string | null;
+			validTo: string | null;
+			daysRemaining: number | null;
+			issuer: string | null;
+			authorized: boolean;
+			authorizationError: string | null;
+	  }
+	| { error: string };
+
+type SecurityData = {
+	headers: SecurityHeaderFinding[];
+	cookies: SecurityCookieFinding[];
+	tls: SecurityTls;
+	servedOverHttps: boolean;
+};
+
+type AeoData = {
+	llmsTxt: boolean;
+	sitemap: boolean;
+	crawlers: Array<{ agent: string; allowed: boolean }>;
+	structuredData: { blocks: number; valid: number; types: string[] };
+	headings: { h1Count: number; hierarchyOk: boolean };
+	jsDependencyRatio: number;
+};
+
+/** "1 day" / "2 days" — never a bare count in front of a noun. */
+function plural(n: number, noun: string): string {
+	return `${n} ${noun}${n === 1 ? '' : 's'}`;
+}
+
+/** Header name in Title-Case, for display in a finding sentence. */
+function headerTitle(header: string): string {
+	return header
+		.split('-')
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join('-');
+}
+
+const SECURITY_MIN_CERT_DAYS = 30;
+const AEO_POOR_JS_RATIO = 0.5;
+const AEO_NEEDS_WORK_JS_RATIO = 0.8;
+
 /**
  * The Building Inspection's defining device: every check opens with a
  * severity word and a plain-English finding, before any number. A reader who
@@ -173,6 +238,205 @@ function oldSeoSeverity(d: OldSeoData): Severity {
 	};
 }
 
+function isWayback(d: unknown): d is WaybackData {
+	const w = d as WaybackData | null;
+	return (
+		!!w &&
+		(w.firstSeen === null || typeof w.firstSeen === 'string') &&
+		(w.lastSeen === null || typeof w.lastSeen === 'string') &&
+		Array.isArray(w.snapshotsByYear) &&
+		w.snapshotsByYear.every(
+			(row) => typeof row?.year === 'string' && /^\d{4}$/.test(row.year) && isNumber(row?.count)
+		)
+	);
+}
+
+function waybackSeverity(d: WaybackData): Severity {
+	if (!d.firstSeen || d.snapshotsByYear.length === 0) {
+		return {
+			word: 'Nothing archived',
+			tone: 'na',
+			finding: 'The Internet Archive has no record of this site.'
+		};
+	}
+
+	const firstYear = d.firstSeen.slice(0, 4);
+	// The latest year is read from snapshotsByYear rather than lastSeen — the
+	// analyzer derives both from the same underlying CDX rows, so they always
+	// agree, but snapshotsByYear is what this function's counts come from.
+	const sorted = [...d.snapshotsByYear].sort((a, b) => a.year.localeCompare(b.year));
+	const latest = sorted[sorted.length - 1];
+	const currentYear = new Date().getFullYear();
+	const latestYear = Number(latest.year);
+
+	if (latestYear >= currentYear - 1) {
+		return {
+			word: 'Good',
+			tone: 'ok',
+			finding: `Archived since ${firstYear}, captured on ${plural(latest.count, 'day')} in ${
+				latest.year
+			}.`
+		};
+	}
+
+	return {
+		word: 'Needs work',
+		tone: 'warn',
+		finding: `Last archived in ${latest.year}; the archive has nothing more recent.`
+	};
+}
+
+function isSecurity(d: unknown): d is SecurityData {
+	const s = d as SecurityData | null;
+	return (
+		!!s &&
+		Array.isArray(s.headers) &&
+		s.headers.every(
+			(h) =>
+				typeof h?.header === 'string' &&
+				typeof h?.present === 'boolean' &&
+				typeof h?.severity === 'string'
+		) &&
+		Array.isArray(s.cookies) &&
+		s.cookies.every((c) => typeof c?.name === 'string') &&
+		typeof s.tls === 'object' &&
+		s.tls !== null &&
+		typeof s.servedOverHttps === 'boolean'
+	);
+}
+
+function securitySeverity(d: SecurityData): Severity {
+	const tlsError = 'error' in d.tls ? d.tls.error : null;
+	const tls = 'error' in d.tls ? null : d.tls;
+
+	if (!d.servedOverHttps) {
+		return { word: 'Poor', tone: 'fail', finding: 'The site is not served over HTTPS.' };
+	}
+	if (tls && tls.authorized === false) {
+		return {
+			word: 'Poor',
+			tone: 'fail',
+			finding: `The certificate is invalid: ${tls.authorizationError ?? 'not trusted'}.`
+		};
+	}
+	if (tls && tls.daysRemaining !== null && tls.daysRemaining <= 0) {
+		const finding =
+			tls.daysRemaining === 0
+				? 'The certificate expired today.'
+				: `The certificate expired ${plural(-tls.daysRemaining, 'day')} ago.`;
+		return { word: 'Poor', tone: 'fail', finding };
+	}
+
+	const missingHigh = d.headers.filter((h) => !h.present && h.severity === 'high');
+	if (missingHigh.length > 0) {
+		return {
+			word: 'Poor',
+			tone: 'fail',
+			finding: `${missingHigh.length} important security header${
+				missingHigh.length === 1 ? ' is' : 's are'
+			} missing, starting with ${headerTitle(missingHigh[0].header)}.`
+		};
+	}
+
+	const missingMedium = d.headers.filter((h) => !h.present && h.severity === 'medium');
+	if (missingMedium.length > 0) {
+		return {
+			word: 'Needs work',
+			tone: 'warn',
+			finding: `${missingMedium.length} security header${
+				missingMedium.length === 1 ? ' is' : 's are'
+			} missing, starting with ${headerTitle(missingMedium[0].header)}.`
+		};
+	}
+
+	const weakCookie = d.cookies.find((c) => !c.secure || !c.httpOnly);
+	if (weakCookie) {
+		return {
+			word: 'Needs work',
+			tone: 'warn',
+			finding: `The cookie "${weakCookie.name}" is missing ${
+				!weakCookie.secure && !weakCookie.httpOnly
+					? 'the Secure and HttpOnly flags'
+					: !weakCookie.secure
+					? 'the Secure flag'
+					: 'the HttpOnly flag'
+			}.`
+		};
+	}
+
+	if (tls && tls.daysRemaining !== null && tls.daysRemaining < SECURITY_MIN_CERT_DAYS) {
+		return {
+			word: 'Needs work',
+			tone: 'warn',
+			finding: `The certificate expires in ${plural(tls.daysRemaining, 'day')}.`
+		};
+	}
+
+	if (tlsError) {
+		return {
+			word: 'Good',
+			tone: 'ok',
+			finding: `The certificate could not be inspected — ${tlsError}. Everything else checked out.`
+		};
+	}
+
+	return {
+		word: 'Good',
+		tone: 'ok',
+		finding: 'All security headers are present and the certificate is valid.'
+	};
+}
+
+function isAeo(d: unknown): d is AeoData {
+	const a = d as AeoData | null;
+	return (
+		!!a &&
+		typeof a.llmsTxt === 'boolean' &&
+		typeof a.sitemap === 'boolean' &&
+		Array.isArray(a.crawlers) &&
+		isNumber(a.structuredData?.valid) &&
+		isNumber(a.structuredData?.blocks) &&
+		isNumber(a.headings?.h1Count) &&
+		typeof a.headings?.hierarchyOk === 'boolean' &&
+		isNumber(a.jsDependencyRatio)
+	);
+}
+
+/** A ratio under 1 must never round up to display as 100%. */
+function jsRatioPercent(ratio: number): number {
+	if (ratio >= 1) return 100;
+	return Math.min(99, Math.round(ratio * 100));
+}
+
+function aeoSeverity(d: AeoData): Severity {
+	const percent = jsRatioPercent(d.jsDependencyRatio);
+	const lead = `${percent}% of the page text is available without JavaScript`;
+
+	const issues: string[] = [];
+	if (!d.sitemap) issues.push('no sitemap was found');
+	if (d.structuredData.valid === 0) issues.push('no valid structured data was found');
+	if (d.headings.h1Count !== 1)
+		issues.push(
+			d.headings.h1Count === 0
+				? 'the page has no H1 heading'
+				: 'the page has more than one H1 heading'
+		);
+	if (!d.headings.hierarchyOk) issues.push('the heading hierarchy skips levels');
+	const blockedCrawler = d.crawlers.find((c) => !c.allowed);
+	if (blockedCrawler) issues.push(`${blockedCrawler.agent} is blocked by robots.txt`);
+
+	const finding = issues.length > 0 ? `${lead}; ${issues[0]}.` : `${lead}.`;
+
+	if (d.jsDependencyRatio < AEO_POOR_JS_RATIO) {
+		return { word: 'Poor', tone: 'fail', finding };
+	}
+	if (d.jsDependencyRatio < AEO_NEEDS_WORK_JS_RATIO || issues.length > 0) {
+		return { word: 'Needs work', tone: 'warn', finding };
+	}
+
+	return { word: 'Good', tone: 'ok', finding };
+}
+
 export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): Severity {
 	if (!result) return { word: 'Not run', tone: 'na', finding: 'This check was not run.' };
 
@@ -198,8 +462,11 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 	if (id === 'lighthouse' && isLighthouse(result.data)) return lighthouseSeverity(result.data);
 	if (id === 'keywords' && isKeywords(result.data)) return keywordsSeverity(result.data);
 	if (id === 'oldseo' && isOldSeo(result.data)) return oldSeoSeverity(result.data);
+	if (id === 'wayback' && isWayback(result.data)) return waybackSeverity(result.data);
+	if (id === 'security' && isSecurity(result.data)) return securitySeverity(result.data);
+	if (id === 'aeo' && isAeo(result.data)) return aeoSeverity(result.data);
 
 	// A check with no component yet, or data in an unexpected shape: say it
 	// measured, and let the raw values below carry the detail.
-	return { word: 'Measured', tone: 'ok', finding: 'See the readings below.' };
+	return { word: 'Measured', tone: 'na', finding: 'See the readings below.' };
 }

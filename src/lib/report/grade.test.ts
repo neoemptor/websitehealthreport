@@ -98,6 +98,16 @@ describe('gradeOf', () => {
 		expect(g).toEqual({ letter: '—', measured: 0, total: 1, ratio: 0 });
 	});
 
+	it('excludes a result with an unrecognised data shape from the ratio', () => {
+		const g = gradeOf(
+			domain({
+				lighthouse: { status: 'ok', data: { nope: true } } as unknown as AnalyzerResult
+			}),
+			['lighthouse']
+		);
+		expect(g).toEqual({ letter: '—', measured: 0, total: 1, ratio: 0 });
+	});
+
 	it('treats a keywords "nothing declared" as neutral, not a fault', () => {
 		const g = gradeOf(
 			domain({ lighthouse: lh(95), keywords: { status: 'ok', data: { keywords: [] } } }),

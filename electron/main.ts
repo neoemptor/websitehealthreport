@@ -3,6 +3,7 @@ import * as path from 'path';
 import { createLogger } from './logger';
 import { registerIpc } from './ipc';
 import { startStaticServer } from './server';
+import { pickRendererSource } from './renderer-source';
 
 async function createWindow(rendererBase: string): Promise<BrowserWindow> {
 	const window = new BrowserWindow({
@@ -29,7 +30,8 @@ app.whenReady().then(async () => {
 	// static server so both the main window and the PDF export window (see
 	// ipc.ts) navigate to real routes like `/report/:id` over HTTP.
 	let rendererBase: string;
-	if (app.isPackaged) {
+	const source = await pickRendererSource({ packaged: app.isPackaged });
+	if (source.kind === 'build') {
 		// tsconfig.electron.json has rootDir ".", so this file compiles to
 		// dist-electron/electron/main.js — two levels below the project root,
 		// where SvelteKit's adapter-static output lives in build/.
@@ -39,8 +41,9 @@ app.whenReady().then(async () => {
 			void server.close();
 		});
 	} else {
-		rendererBase = 'http://localhost:5173';
+		rendererBase = source.base;
 	}
+	logger.info('renderer', { source: source.kind, base: rendererBase });
 
 	const window = await createWindow(rendererBase);
 	const ipc = registerIpc({ userDataDir: app.getPath('userData'), window, logger, rendererBase });

@@ -18,7 +18,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"electron:compile": "tsc -p tsconfig.electron.json && node electron/postbuild.cjs",
-		"electron:dev": "npm run electron:compile && concurrently \"vite dev\" \"electron dist-electron/electron/main.js\"",
+		"electron:dev": "npm run electron:compile && concurrently -k \"vite dev --port 5173 --strictPort\" \"node scripts/wait-port.cjs 5173 && electron dist-electron/electron/main.js\"",
+		"electron:start": "npm run build && npm run electron:compile && electron dist-electron/electron/main.js",
 		"app:build": "vite build && npm run electron:compile && electron-builder",
 		"qr:regen": "node -e \"require('qrcode').toString(process.argv[1],{type:'svg',errorCorrectionLevel:'M',margin:4}).then(s=>require('fs').writeFileSync('src/lib/report/qr-website.svg',s))\" https://dsbaileyfreelancer.com.au"
 	},

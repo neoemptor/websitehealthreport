@@ -36,8 +36,8 @@ export const STOP_WORDS = new Set(
 );
 
 export function words(text: string): string[] {
-	return (text.toLowerCase().match(/[a-z0-9]+(?:[''-][a-z0-9]+)*/g) ?? []).map((w) =>
-		w.replace(/'/g, "'")
+	return (text.toLowerCase().match(/[a-z0-9]+(?:['\u2019-][a-z0-9]+)*/g) ?? []).map((w) =>
+		w.replace(/\u2019/g, "'")
 	);
 }
 
@@ -67,8 +67,11 @@ export function topPhrases(
 	for (const n of [1, 2, 3]) {
 		for (const phrase of ngrams(tokens, n)) {
 			if (n === 1 && STOP_WORDS.has(phrase)) continue;
-			// A multi-word phrase made only of stop words ("of the") is noise.
-			if (n > 1 && phrase.split(' ').every((w) => STOP_WORDS.has(w))) continue;
+			// A multi-word phrase bounded by a stop word ("of the", "the roller doors") is noise.
+			if (n > 1) {
+				const parts = phrase.split(' ');
+				if (STOP_WORDS.has(parts[0]) || STOP_WORDS.has(parts[parts.length - 1])) continue;
+			}
 			const entry = counts.get(phrase) ?? { n, occurrences: 0 };
 			entry.occurrences++;
 			counts.set(phrase, entry);
@@ -78,16 +81,21 @@ export function topPhrases(
 		.map(([phrase, v]) => ({ phrase, n: v.n, occurrences: v.occurrences }))
 		.sort((a, b) => {
 			if (b.occurrences !== a.occurrences) return b.occurrences - a.occurrences;
-			const orderA = a.n === 2 ? 0 : a.n === 3 ? 1 : 2;
-			const orderB = b.n === 2 ? 0 : b.n === 3 ? 1 : 2;
-			if (orderA !== orderB) return orderA - orderB;
+			if (b.n !== a.n) return b.n - a.n;
 			return a.phrase.localeCompare(b.phrase);
 		})
 		.slice(0, count);
 }
 
 export function cleanEvidence(s: string): string {
-	return s.replace(/[ -]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+	return (
+		s
+			// eslint-disable-next-line no-control-regex -- intentionally strips ASCII control chars
+			.replace(/[\u0000-\u001f\u007f]+/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim()
+			.slice(0, 160)
+	);
 }
 
 /** Test fixture helper: a complete snapshot from the fields a test cares about. */

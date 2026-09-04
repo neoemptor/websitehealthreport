@@ -19,6 +19,10 @@ describe('words', () => {
 			'doors'
 		]);
 	});
+
+	it('normalises a curly apostrophe to a straight one', () => {
+		expect(words('Perth\u2019s doors')).toEqual(["perth's", 'doors']);
+	});
 });
 
 describe('ngrams', () => {
@@ -50,6 +54,11 @@ describe('cleanEvidence', () => {
 	it('collapses control characters and caps at 160', () => {
 		expect(cleanEvidence('a\n\tb  c')).toBe('a b c');
 		expect(cleanEvidence('x'.repeat(200)).length).toBe(160);
+	});
+
+	it('replaces raw control characters with a space but leaves hyphens alone', () => {
+		expect(cleanEvidence('a\u0000b\u001fc')).toBe('a b c');
+		expect(cleanEvidence('co-operative')).toBe('co-operative');
 	});
 });
 

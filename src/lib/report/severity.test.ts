@@ -699,6 +699,25 @@ describe('severityOf — traffic-estimated', () => {
 		expect(s.finding).toBe('About 10 visits a month (estimate), ranking for 1 keyword.');
 	});
 
+	it('omits the visits clause when organicTraffic is null', () => {
+		const s = severityOf('traffic-estimated', ok({ organicKeywords: 678 }));
+		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s.finding).toBe('Ranking for 678 keywords (estimate).');
+		expect(s.finding).not.toMatch(/0 visits/);
+	});
+
+	it('omits the keywords clause when organicKeywords is null', () => {
+		const s = severityOf('traffic-estimated', ok({ organicTraffic: 12345 }));
+		expect(s).toMatchObject({ word: 'Measured', tone: 'ok' });
+		expect(s.finding).toBe('About 12,345 visits a month (estimate).');
+	});
+
+	it('never prints "About 0 visits" for a null organicTraffic', () => {
+		const s = severityOf('traffic-estimated', ok({ organicKeywords: 1 }));
+		expect(s.finding).not.toMatch(/About 0 visits/);
+		expect(s.finding).toBe('Ranking for 1 keyword (estimate).');
+	});
+
 	it('falls back to Measured when the data is not traffic-estimated-shaped', () => {
 		expect(severityOf('traffic-estimated', { status: 'ok', data: { nope: true } })).toMatchObject({
 			word: 'Measured',

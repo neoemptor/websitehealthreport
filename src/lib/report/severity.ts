@@ -608,15 +608,25 @@ function trafficEstimatedSeverity(d: TrafficEstimatedData): Severity {
 		};
 	}
 
-	const visits = d.organicTraffic ?? 0;
-	const keywords = d.organicKeywords ?? 0;
-	return {
-		word: 'Measured',
-		tone: 'ok',
-		finding: `About ${visits.toLocaleString(
-			'en-AU'
-		)} visits a month (estimate), ranking for ${plural(keywords, 'keyword')}.`
-	};
+	const visitsClause =
+		d.organicTraffic !== null
+			? `About ${d.organicTraffic.toLocaleString('en-AU')} visits a month (estimate)`
+			: null;
+	const keywordsClause =
+		d.organicKeywords !== null ? `ranking for ${plural(d.organicKeywords, 'keyword')}` : null;
+
+	let finding: string;
+	if (visitsClause && keywordsClause) {
+		finding = `${visitsClause}, ${keywordsClause}.`;
+	} else if (visitsClause) {
+		finding = `${visitsClause}.`;
+	} else if (keywordsClause) {
+		finding = `Ranking for ${plural(d.organicKeywords as number, 'keyword')} (estimate).`;
+	} else {
+		finding = 'Semrush has an estimate for this site, but no visits or keyword figures.';
+	}
+
+	return { word: 'Measured', tone: 'ok', finding };
 }
 
 function isSourceResult<T>(v: unknown, isData: (d: unknown) => d is T): v is SourceResult<T> {

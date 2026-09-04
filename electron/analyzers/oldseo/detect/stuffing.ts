@@ -11,7 +11,12 @@ const ALT_MIN_OCCURRENCES = 10;
 
 type Hit = { phrase: string; n: number; occurrences: number; density: number };
 
-/** Every 1–3-gram with its occurrence count and density, stop words excluded. */
+/**
+ * Every 1–3-gram with its occurrence count and density, stop words excluded.
+ * N-grams overlap by design: "garage doors garage doors" also counts "doors
+ * garage". Callers only report the single worst phrase per rule, so this
+ * overlap does not inflate the reported figure.
+ */
 function phraseHits(text: string): Hit[] {
 	const tokens = words(text);
 	if (tokens.length === 0) return [];
@@ -78,21 +83,21 @@ export function detectStuffing(pages: PageSnapshot[]): Finding[] {
 					)}% of ${total} words`
 				)
 			});
-		} else {
-			const word = worst(
-				hits,
-				(h) => h.n === 1 && h.occurrences >= WORD_MIN_OCCURRENCES && h.density > WORD_MIN_DENSITY
-			);
-			if (word) {
-				findings.push({
-					check: 'stuffing',
-					severity: 'medium',
-					page: page.path,
-					evidence: cleanEvidence(
-						`"${word.phrase}" ×${word.occurrences}, ${word.density.toFixed(1)}% of ${total} words`
-					)
-				});
-			}
+		}
+
+		const word = worst(
+			hits,
+			(h) => h.n === 1 && h.occurrences >= WORD_MIN_OCCURRENCES && h.density > WORD_MIN_DENSITY
+		);
+		if (word) {
+			findings.push({
+				check: 'stuffing',
+				severity: 'medium',
+				page: page.path,
+				evidence: cleanEvidence(
+					`"${word.phrase}" ×${word.occurrences}, ${word.density.toFixed(1)}% of ${total} words`
+				)
+			});
 		}
 
 		const list = commaList(page.visibleText);

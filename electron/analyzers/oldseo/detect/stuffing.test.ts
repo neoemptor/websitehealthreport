@@ -28,6 +28,20 @@ describe('detectStuffing', () => {
 		expect(out[0].evidence).toMatch(/^"perth" ×12/);
 	});
 
+	it('flags both a high phrase finding and a medium word finding on the same page', () => {
+		// 8 × "garage doors" = 16 words → high. 12 × "perth" interleaved with
+		// unique filler so "perth" never repeats as a 2-gram and no 2-gram
+		// other than "garage doors" reaches 8 occurrences.
+		const perthWords = Array.from({ length: 12 }, (_, i) => `perth pfill${i}`).join(' ');
+		const text = `${'garage doors '.repeat(8)}${perthWords} ${filler(60)}`;
+		const out = detectStuffing([makeSnapshot({ path: '/', visibleText: text })]);
+		expect(out).toHaveLength(2);
+		expect(out[0]).toMatchObject({ severity: 'high' });
+		expect(out[0].evidence).toMatch(/^"garage doors" ×8/);
+		expect(out[1]).toMatchObject({ severity: 'medium' });
+		expect(out[1].evidence).toMatch(/^"perth" ×12/);
+	});
+
 	it('flags a comma list of keyword phrases as medium', () => {
 		const text = `Welcome to our site.\ngarage doors perth, roller doors perth, sectional doors, garage door repairs, door motors\nCall us today.`;
 		const out = detectStuffing([makeSnapshot({ path: '/', visibleText: text })]);

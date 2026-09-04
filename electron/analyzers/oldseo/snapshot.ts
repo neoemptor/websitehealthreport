@@ -20,7 +20,7 @@ export type PageSnapshot = {
 	metaKeywords: string | null;
 	metaRobots: string | null;
 	h1s: string[];
-	/** Visible text only, whitespace collapsed. */
+	/** Visible text, one text node per line: whitespace is collapsed within a node and nodes are joined with "\n", so a comma list written as one block stays on one line. */
 	visibleText: string;
 	/** All alt attributes joined by a space. */
 	altText: string;

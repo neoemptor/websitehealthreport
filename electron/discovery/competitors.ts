@@ -100,7 +100,7 @@ export async function suggestCompetitors(
 		}
 	}
 
-	const raw = (await deps.runClaude({
+	const result = await deps.runClaude({
 		prompt: buildPrompt({ client, hint: input.hint, webSearch: input.webSearch }, page),
 		systemAppend: SYSTEM_APPEND,
 		schema: SCHEMA,
@@ -108,11 +108,19 @@ export async function suggestCompetitors(
 		signal,
 		timeoutMs: deps.timeoutMs ?? 150_000,
 		cwd: deps.cwd
-	})) as { suggestions?: Array<Partial<Suggestion>> };
+	});
+	const rawSuggestions =
+		result &&
+		typeof result === 'object' &&
+		Array.isArray((result as { suggestions?: unknown }).suggestions)
+			? ((result as { suggestions?: unknown[] }).suggestions as unknown[])
+			: [];
 
 	const seen = new Set<string>();
 	const suggestions: Suggestion[] = [];
-	for (const s of raw.suggestions ?? []) {
+	for (const entry of rawSuggestions) {
+		if (!entry || typeof entry !== 'object') continue;
+		const s = entry as Partial<Suggestion>;
 		const domain = typeof s.domain === 'string' ? hostnameOf(s.domain) : null;
 		if (!domain || domain === clientHost || seen.has(domain)) continue;
 		seen.add(domain);

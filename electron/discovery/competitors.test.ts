@@ -109,6 +109,18 @@ describe('suggestCompetitors', () => {
 		expect(d.runClaude).not.toHaveBeenCalled();
 	});
 
+	it('skips non-object entries in suggestions', async () => {
+		const d = deps({ suggestions: [null, 'x', suggestion('a.com.au')] });
+		const out = await suggestCompetitors(input, new AbortController().signal, d);
+		expect(out.suggestions).toEqual([{ domain: 'a.com.au', name: 'a.com.au', reason: 'r' }]);
+	});
+
+	it('treats a non-object runClaude result as no suggestions', async () => {
+		const d = deps(null);
+		const out = await suggestCompetitors(input, new AbortController().signal, d);
+		expect(out.suggestions).toEqual([]);
+	});
+
 	it('passes the schema and the fixed system append', async () => {
 		const d = deps({ suggestions: [] });
 		await suggestCompetitors(input, new AbortController().signal, d);

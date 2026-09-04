@@ -213,8 +213,12 @@
 						</span>
 					</div>
 
-					<!-- Status rail: the shape of the result before any numbers. -->
-					<div class="mt-3 flex break-inside-avoid flex-wrap gap-x-6 gap-y-1.5">
+					<!-- Status rail: the shape of the result before any numbers. It refuses
+					     a break after it as well as inside, so a domain heading and its
+					     rail are never left at the foot of a page with the first check
+					     overleaf — the chain of avoid-after runs from the heading through
+					     the first check's finding. -->
+					<div class="mt-3 flex break-inside-avoid break-after-avoid flex-wrap gap-x-6 gap-y-1.5">
 						{#each run.enabledAnalyzers as id}
 							{@const m = mark(domain.analyzers[id])}
 							<span class="chip {m.tone}" data-mark={m.mark}>

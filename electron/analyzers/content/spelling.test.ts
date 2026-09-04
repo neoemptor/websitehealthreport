@@ -65,4 +65,59 @@ describe('spell checker', () => {
 		const checker = await createSpellChecker();
 		expect(checker.check(['Cjsgaragedoors'], ['cjsgaragedoors'])).toEqual([]);
 	});
+
+	it('skips capitalised words as likely proper nouns', async () => {
+		const checker = await createSpellChecker();
+		expect(checker.check(['Mandurah'], [])).toEqual([]);
+	});
+
+	it('skips all-caps acronyms', async () => {
+		const checker = await createSpellChecker();
+		expect(checker.check(['CJ', 'ABN'], [])).toEqual([]);
+	});
+
+	it('still flags a genuine misspelling mid-sentence', async () => {
+		const checker = await createSpellChecker();
+		const words = extractWords('Please recieve the goods.');
+		const [finding] = checker.check(words, []);
+		expect(finding.word).toBe('recieve');
+	});
+
+	it('splits hyphenated words and flags the misspelled part', async () => {
+		const checker = await createSpellChecker();
+		const words = extractWords('a well-knowen brand');
+		const [finding] = checker.check(words, []);
+		expect(finding.word).toBe('knowen');
+	});
+
+	it('retries a failed dictionary load on the next call', async () => {
+		vi.resetModules();
+		let attempts = 0;
+		vi.doMock('../../esm', () => ({
+			importEsm: async (specifier: string) => {
+				attempts += 1;
+				if (attempts === 1) throw new Error('load failed');
+				if (specifier === 'dictionary-en-au') {
+					const require = createRequire(import.meta.url);
+					const dir = require.resolve('dictionary-en-au').replace('index.js', '');
+					return {
+						default: {
+							aff: readFileSync(dir + 'index.aff'),
+							dic: readFileSync(dir + 'index.dic')
+						}
+					};
+				}
+				throw new Error('unexpected import ' + specifier);
+			}
+		}));
+
+		const { createSpellChecker: createSpellCheckerRetry } = await import('./spelling');
+
+		await expect(createSpellCheckerRetry()).rejects.toThrow('load failed');
+		const checker = await createSpellCheckerRetry();
+		expect(checker.check(['colour'], [])).toEqual([]);
+
+		vi.doUnmock('../../esm');
+		vi.resetModules();
+	});
 });

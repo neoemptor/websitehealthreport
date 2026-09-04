@@ -231,3 +231,29 @@ export function snapshotScript(): (url: string) => RawSnapshot {
 		};
 	};
 }
+
+/** robots.txt text, or null when missing or unreadable (treated as allow-all). */
+export async function fetchRobots(
+	base: URL,
+	signal: AbortSignal,
+	fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+	if (signal.aborted) return null;
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), 10_000);
+	const onAbort = () => controller.abort();
+	signal.addEventListener('abort', onAbort, { once: true });
+	try {
+		const response = await fetchImpl(new URL('/robots.txt', base).toString(), {
+			signal: controller.signal,
+			headers: { 'User-Agent': 'WebsiteHealthReport/1.0 (+https://dsbaileyfreelancer.com.au)' }
+		});
+		if (!response.ok) return null;
+		return (await response.text()).slice(0, 100_000);
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timer);
+		signal.removeEventListener('abort', onAbort);
+	}
+}

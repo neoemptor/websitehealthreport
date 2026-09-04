@@ -231,8 +231,10 @@ describe('accessTokenFor', () => {
 		const credentials = fakeCredentials({ 'google.refresh.example.com': 'rt-123' });
 		const fetchMock = vi
 			.fn()
+			// Inside the refresh margin, so this entry is cached but is always due
+			// for a refresh on the next call.
 			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ access_token: 'at-abc', expires_in: 3600 }), { status: 200 })
+				new Response(JSON.stringify({ access_token: 'at-abc', expires_in: 30 }), { status: 200 })
 			)
 			.mockResolvedValueOnce(
 				new Response(JSON.stringify({ error: 'server_error' }), { status: 500 })
@@ -249,7 +251,6 @@ describe('accessTokenFor', () => {
 		// A cached entry that has all but expired is refreshed, and the failure
 		// that follows drops it, so the next call posts again rather than
 		// returning the dead token.
-		clearAccessTokenCache();
 		await expect(
 			accessTokenFor('https://example.com/', credentials, 'cid', 'secret')
 		).rejects.toThrow(/server_error/);
@@ -258,6 +259,33 @@ describe('accessTokenFor', () => {
 			'at-def'
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(3);
+	});
+
+	it('does not serve a reconnected account the previous account’s token', async () => {
+		// Same site, so the same credential key: only the stored refresh token
+		// changes, as it would after reconnecting a different Google account.
+		const store = { 'google.refresh.example.com': 'rt-old' };
+		const credentials = fakeCredentials(store);
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-old', expires_in: 3600 }), { status: 200 })
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ access_token: 'at-new', expires_in: 3600 }), { status: 200 })
+			);
+		vi.stubGlobal('fetch', fetchMock);
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-old'
+		);
+
+		store['google.refresh.example.com'] = 'rt-new';
+
+		expect(await accessTokenFor('https://example.com/', credentials, 'cid', 'secret')).toBe(
+			'at-new'
+		);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('does not cache a token Google gave no expiry for', async () => {

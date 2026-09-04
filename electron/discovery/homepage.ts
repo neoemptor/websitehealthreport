@@ -51,14 +51,29 @@ export function stripTags(html: string): string {
 		.replace(TAG, ' ');
 }
 
+/**
+ * The three extractors below open their tag with `ATTRS` for the same reason
+ * `TAG` does: a `>` inside a quoted attribute value (`<body data-x="a>b">`)
+ * must not be mistaken for the end of the tag.
+ */
+const TITLE = new RegExp(`<title${ATTRS}>([\\s\\S]*?)<\\/title\\s*>`, 'i');
+const BODY = new RegExp(`<body${ATTRS}>([\\s\\S]*)<\\/body\\s*>`, 'i');
+const DESCRIPTION = new RegExp(
+	`<meta${ATTRS}name=["']description["']${ATTRS}content=["']([^"']*)["']`,
+	'i'
+);
+/** The same, for the attributes written the other way round. */
+const DESCRIPTION_REVERSED = new RegExp(
+	`<meta${ATTRS}content=["']([^"']*)["']${ATTRS}name=["']description["']`,
+	'i'
+);
+
 export function stripHtml(html: string): Homepage {
-	const title = squash(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '');
+	const title = squash(TITLE.exec(html)?.[1] ?? '');
 	const description = squash(
-		/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i.exec(html)?.[1] ??
-			/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i.exec(html)?.[1] ??
-			''
+		DESCRIPTION.exec(html)?.[1] ?? DESCRIPTION_REVERSED.exec(html)?.[1] ?? ''
 	);
-	const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
+	const body = BODY.exec(html)?.[1] ?? html;
 	const text = squash(stripTags(body)).slice(0, TEXT_CAP);
 	return { title, description, text };
 }

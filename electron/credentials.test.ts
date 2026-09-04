@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -102,6 +102,11 @@ describe('CredentialStore', () => {
 
 	it('still saves the credential when the directory chmod fails', async () => {
 		const actual = await vi.importActual<typeof import('fs/promises')>('fs/promises');
+		// Restored on teardown rather than after the assertion, so a failing
+		// expectation cannot leave the broken chmod in place for later tests.
+		onTestFinished(() => {
+			chmodSpy.mockImplementation(actual.chmod);
+		});
 		chmodSpy.mockImplementation(async (target: unknown, mode: unknown) => {
 			if (target === dir) throw new Error('EPERM');
 			await actual.chmod(target as string, mode as number);
@@ -110,7 +115,6 @@ describe('CredentialStore', () => {
 		await store.set('semrush', 'key-123');
 
 		expect(await store.get('semrush')).toBe('key-123');
-		chmodSpy.mockImplementation(actual.chmod);
 	});
 
 	it('serialises overlapping set() calls so no write is lost', async () => {

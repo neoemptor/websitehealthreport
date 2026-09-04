@@ -63,7 +63,7 @@ vi.mock('./crawl', async (importOriginal) => {
 	};
 });
 
-const { oldSeoAnalyzer } = await import('./index');
+const { oldSeoAnalyzer, DEFAULT_MAX_PAGES } = await import('./index');
 const settings = { maxPages: 10 };
 
 beforeEach(() => {
@@ -72,12 +72,20 @@ beforeEach(() => {
 	state.closes = 0;
 	state.robots = '';
 	state.visits = [];
+	// Twelve crawlable pages: more than the default cap, so a run that falls
+	// back to the default is distinguishable from one using a small cap.
+	const spares = ['/d', '/e', '/f', '/g', '/h', '/i', '/j', '/k', '/l'];
 	state.pages = {
-		'https://example.com/': { links: ['/a', '/b', '/admin/secret', 'https://other.com/'] },
+		'https://example.com/': {
+			links: ['/a', '/b', '/admin/secret', 'https://other.com/', ...spares]
+		},
 		'https://example.com/a': { links: ['/c'] },
 		'https://example.com/b': { links: [] },
 		'https://example.com/c': { links: [] },
-		'https://example.com/admin/secret': { links: [] }
+		'https://example.com/admin/secret': { links: [] },
+		...Object.fromEntries(
+			spares.map((slug) => [`https://example.com${slug}`, { links: [] as string[] }])
+		)
 	};
 });
 
@@ -122,7 +130,9 @@ describe('oldseo analyze', () => {
 			new AbortController().signal
 		);
 		// Not 1: a NaN cap must not silently reduce the crawl to the homepage.
-		expect(data.pagesRead).toBe(4);
+		// The homepage plus the default budget, and the fixture has more pages
+		// than that budget, so this could not be mistaken for a smaller cap.
+		expect(data.pagesRead).toBe(DEFAULT_MAX_PAGES + 1);
 	});
 
 	it('counts a failing internal page as skipped and continues', async () => {

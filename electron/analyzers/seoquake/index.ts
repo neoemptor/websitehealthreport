@@ -170,9 +170,22 @@ async function scrape(
 			// than a closure calling extractNodes) because Puppeteer serializes a
 			// function argument by its own source text alone — a reference to a
 			// module-scope function would not resolve inside the page. Splicing in
-			// extractNodes's source keeps this the same one copy used below.
+			// extractNodes's source keeps this the same one copy used below, and
+			// the pairing rule is inlined for the same reason: the predicate must
+			// hold true only once a value span has a label span before it in the
+			// same parent, which is exactly the pair `pairLabels` would report.
 			await page.waitForFunction(
-				`(${extractNodes.toString()})().some((node) => node.kind === 'value')`,
+				`(() => {
+					const nodes = (${extractNodes.toString()})();
+					const labelled = new Set();
+					return nodes.some((node) => {
+						if (node.kind === 'label') {
+							labelled.add(node.parent);
+							return false;
+						}
+						return labelled.has(node.parent);
+					});
+				})()`,
 				{ timeout: 45_000 }
 			);
 		} catch {

@@ -131,13 +131,24 @@ export async function exchangeCode(opts: {
 }
 
 /**
- * Access tokens Google has already issued, keyed by the refresh-token
- * credential key (i.e. per site). Google's tokens last an hour, so a run that
- * reads Search Console and GA4 for the same site would otherwise pay for a
- * token round-trip each time. Entries are dropped on any failure so a broken
- * or revoked connection is never served from here.
+ * Access tokens Google has already issued. Google's tokens last an hour, so a
+ * run that reads Search Console and GA4 for the same site would otherwise pay
+ * for a token round-trip each time. Entries are dropped on any failure so a
+ * broken or revoked connection is never served from here.
+ *
+ * The key covers the site *and* the refresh token that minted the entry, so
+ * reconnecting a different Google account for the same site cannot be served
+ * the previous account's access token. The token itself is never used as a
+ * key: only its SHA-256, so this map holds no credential material.
  */
 const accessTokenCache = new Map<string, { token: string; expiresAt: number }>();
+
+function cacheKeyFor(domain: string, refreshToken: string): string {
+	return `${refreshTokenKey(domain)}:${crypto
+		.createHash('sha256')
+		.update(refreshToken)
+		.digest('hex')}`;
+}
 
 /** Refresh a little before expiry so a token cannot lapse mid-request. */
 const EXPIRY_MARGIN_MS = 60_000;
@@ -154,12 +165,12 @@ export async function accessTokenFor(
 	clientSecret: string,
 	signal?: AbortSignal
 ): Promise<string> {
-	const cacheKey = refreshTokenKey(domain);
-	const refreshToken = await credentials.get(cacheKey);
+	const refreshToken = await credentials.get(refreshTokenKey(domain));
 	if (!refreshToken) {
 		throw new Error("UNAVAILABLE: This site's Google account has not been connected in Settings.");
 	}
 
+	const cacheKey = cacheKeyFor(domain, refreshToken);
 	const cached = accessTokenCache.get(cacheKey);
 	if (cached && Date.now() < cached.expiresAt - EXPIRY_MARGIN_MS) {
 		return cached.token;

@@ -46,6 +46,22 @@ describe('stripHtml', () => {
 		expect(stripHtml(long).text.length).toBe(6000);
 	});
 
+	it('reads the body when the body tag holds a quoted ">"', () => {
+		const html = '<html><body data-x="a>b"><p>Real words here</p></body></html>';
+		expect(stripHtml(html).text).toBe('Real words here');
+	});
+
+	it('reads the title when the title tag holds a quoted ">"', () => {
+		const html = '<html><head><title data-x="a>b">Doors</title></head><body>Text</body></html>';
+		expect(stripHtml(html).title).toBe('Doors');
+	});
+
+	it('reads the description when an earlier attribute holds a quoted ">"', () => {
+		const html =
+			'<html><head><meta data-x="a>b" name="description" content="Repairs in Mandurah" /></head><body>Text</body></html>';
+		expect(stripHtml(html).description).toBe('Repairs in Mandurah');
+	});
+
 	it('tolerates a page with no head', () => {
 		expect(stripHtml('<p>hi</p>')).toEqual({ title: '', description: '', text: 'hi' });
 	});

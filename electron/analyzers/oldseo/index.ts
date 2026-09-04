@@ -23,7 +23,8 @@ import { detectStale } from './detect/stale';
 export type OldSeoSettings = { maxPages: number };
 
 const PAGE_TIMEOUT_MS = 20_000;
-const DEFAULT_MAX_PAGES = 10;
+/** The crawl budget used when a caller's `maxPages` is not a usable number. */
+export const DEFAULT_MAX_PAGES = 10;
 
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 

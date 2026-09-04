@@ -15,6 +15,23 @@
 		na: 'text-dark-400'
 	};
 
+	// The summary table gives every check one narrow column, so the headings are
+	// abbreviated to fit; the full name stays in the cell's title attribute.
+	const SHORT_NAME: Record<string, string> = {
+		lighthouse: 'Lighthouse',
+		keywords: 'Keywords',
+		oldseo: 'Old SEO',
+		wayback: 'Wayback',
+		security: 'Security',
+		aeo: 'AI agents',
+		seoquake: 'SEO Quake',
+		content: 'Spelling',
+		'traffic-estimated': 'Traffic est.',
+		'traffic-owned': 'Traffic meas.'
+	};
+
+	const shortName = (id: string): string => SHORT_NAME[id] ?? analyzerName(id);
+
 	function host(url: string): string {
 		try {
 			return new URL(url).hostname.replace(/^www\./, '');
@@ -86,18 +103,19 @@
 			<thead>
 				<tr class="border-b border-dark-200">
 					<th
-						class="w-[26%] py-1.5 pr-3 text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
+						class="w-[15%] py-1.5 pr-1 text-[6.5px] font-semibold uppercase leading-tight tracking-normal text-dark-500"
 						>Site</th
 					>
 					{#each run.enabledAnalyzers as id}
 						<th
-							class="whitespace-normal py-1.5 pr-3 text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
+							class="whitespace-normal break-words py-1.5 pr-1 text-[6.5px] font-semibold uppercase leading-tight tracking-normal text-dark-500"
+							title={analyzerName(id)}
 						>
-							{analyzerName(id)}
+							{shortName(id)}
 						</th>
 					{/each}
 					<th
-						class="w-12 py-1.5 text-right text-[9px] font-semibold uppercase leading-tight tracking-[0.1em] text-dark-500"
+						class="w-8 py-1.5 text-right text-[6.5px] font-semibold uppercase leading-tight tracking-normal text-dark-500"
 					>
 						Grade
 					</th>
@@ -106,15 +124,17 @@
 			<tbody>
 				{#each ordered as row (row.domain)}
 					<tr class="break-inside-avoid border-b border-dark-200/70 last:border-0">
-						<td class="py-2 pr-3 align-top">
-							<span class="block font-mono text-[12px] text-dark-700">{row.domain}</span>
-							<span class="block text-[10px] uppercase tracking-[0.12em] text-dark-500"
+						<td class="py-2 pr-1 align-top">
+							<span class="block break-all font-mono text-[9px] leading-tight text-dark-700"
+								>{row.domain}</span
+							>
+							<span class="mt-0.5 block text-[7px] uppercase tracking-[0.08em] text-dark-500"
 								>{row.role}</span
 							>
 						</td>
 						{#each row.cells as cell}
 							<td
-								class="whitespace-nowrap py-2 pr-3 align-top text-[10px] font-semibold uppercase tracking-wide {tone[
+								class="break-words py-2 pr-1 align-top text-[7.5px] font-semibold leading-tight {tone[
 									cell.tone
 								]}"
 							>
@@ -122,7 +142,7 @@
 							</td>
 						{/each}
 						<td
-							class="py-2 text-right align-top font-heading text-[20px] font-bold leading-none {row
+							class="py-2 text-right align-top font-heading text-[17px] font-bold leading-none {row
 								.grade.letter === '—'
 								? 'text-dark-400'
 								: 'text-dark-700'}"

@@ -8,6 +8,7 @@
 	$: searchConsole = view.searchConsole;
 	$: ga4 = view.ga4;
 	$: topQueries = searchConsole.kind === 'ok' ? searchConsole.topQueries : [];
+	$: totals = searchConsole.kind === 'ok' ? searchConsole.totals : null;
 </script>
 
 <p class="mt-2 text-[11px] text-dark-500">
@@ -18,38 +19,43 @@
 	Search Console
 </h4>
 {#if searchConsole.kind === 'ok'}
-	<table class="mt-2 w-full break-inside-avoid border-collapse text-left">
-		<tbody>
-			<tr class="border-b border-dark-200">
-				<td class="py-2 pr-4"><span class="block text-[12px] text-dark-700">Clicks</span></td>
-				<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
-					{searchConsole.clicks.toLocaleString('en-AU')}
-				</td>
-			</tr>
-			<tr class="border-b border-dark-200">
-				<td class="py-2 pr-4"><span class="block text-[12px] text-dark-700">Impressions</span></td>
-				<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
-					{searchConsole.impressions.toLocaleString('en-AU')}
-				</td>
-			</tr>
-			<tr class="border-b border-dark-200">
-				<td class="py-2 pr-4"
-					><span class="block text-[12px] text-dark-700">Click-through rate</span></td
-				>
-				<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
-					{searchConsole.ctrPct}
-				</td>
-			</tr>
-			<tr class="border-b border-dark-200 last:border-0">
-				<td class="py-2 pr-4"
-					><span class="block text-[12px] text-dark-700">Average position</span></td
-				>
-				<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
-					{searchConsole.position}
-				</td>
-			</tr>
-		</tbody>
-	</table>
+	{#if totals}
+		<table class="mt-2 w-full break-inside-avoid border-collapse text-left">
+			<tbody>
+				<tr class="border-b border-dark-200">
+					<td class="py-2 pr-4"><span class="block text-[12px] text-dark-700">Clicks</span></td>
+					<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
+						{totals.clicks.toLocaleString('en-AU')}
+					</td>
+				</tr>
+				<tr class="border-b border-dark-200">
+					<td class="py-2 pr-4"><span class="block text-[12px] text-dark-700">Impressions</span></td
+					>
+					<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
+						{totals.impressions.toLocaleString('en-AU')}
+					</td>
+				</tr>
+				<tr class="border-b border-dark-200">
+					<td class="py-2 pr-4"
+						><span class="block text-[12px] text-dark-700">Click-through rate</span></td
+					>
+					<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
+						{totals.ctrPct}
+					</td>
+				</tr>
+				<tr class="border-b border-dark-200 last:border-0">
+					<td class="py-2 pr-4"
+						><span class="block text-[12px] text-dark-700">Average position</span></td
+					>
+					<td class="py-2 text-right font-mono text-[12px] tabular-nums text-dark-700">
+						{totals.position}
+					</td>
+				</tr>
+			</tbody>
+		</table>
+	{:else}
+		<p class="mt-2 text-[12px] text-dark-500">Totals not available.</p>
+	{/if}
 
 	{#if topQueries.length > 0}
 		<table class="mt-3 w-full border-collapse text-left">

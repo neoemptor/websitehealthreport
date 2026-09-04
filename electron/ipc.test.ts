@@ -5,6 +5,7 @@ import * as path from 'path';
 import { buildHandlers } from './handlers';
 import { CredentialStore, type CryptoBackend } from './credentials';
 import { ClaudeUnavailableError, ClaudeFailedError } from './discovery/claude-cli';
+import { AbortedError } from './analyzers/abort';
 
 let dir: string;
 
@@ -190,6 +191,30 @@ describe('discovery handlers', () => {
 			status: 'failed',
 			error: 'Domain is empty.'
 		});
+	});
+
+	it('maps a typed AbortedError to cancelled, without matching on its message', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					throw new AbortedError('Stopped early.');
+				}
+			}
+		});
+		expect(await handlers.suggestCompetitors(input)).toEqual({ status: 'cancelled' });
+	});
+
+	it('still maps a foreign "Aborted: ..." error to cancelled', async () => {
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				runClaude: async () => {
+					throw new Error('Aborted: the request timed out.');
+				}
+			}
+		});
+		expect(await handlers.suggestCompetitors(input)).toEqual({ status: 'cancelled' });
 	});
 
 	it('reports a non-Error throw by its own text', async () => {

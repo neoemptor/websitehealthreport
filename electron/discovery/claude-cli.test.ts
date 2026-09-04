@@ -239,6 +239,37 @@ describe('runClaude', () => {
 		expect(result).toEqual({ ok: true });
 	});
 
+	it('keeps what a stream printed before it errored, instead of hanging on it', async () => {
+		const spawn: SpawnFn = (command, args) => {
+			const stdout = new PassThrough();
+			const stderr = new PassThrough();
+			const stdin = new PassThrough();
+			const emitter = new EventEmitter();
+			const out = locate(command, args) ?? { stdout: envelope({ ok: true }), code: 0 };
+			const child: Spawned = {
+				stdout,
+				stderr,
+				stdin,
+				kill: () => setImmediate(() => emitter.emit('close', null)),
+				on: (event, listener) => emitter.on(event, listener as (...a: unknown[]) => void)
+			};
+			setImmediate(() => {
+				// Data, then a read error and no 'end': collect() must still settle
+				// with the text it already has, or the run never finishes.
+				if (out.stdout) stdout.write(out.stdout);
+				stdout.emit('error', new Error('EIO'));
+				stderr.emit('error', new Error('EIO'));
+				emitter.emit('close', out.code);
+			});
+			return child;
+		};
+		const result = await runClaude(
+			{ ...baseOpts, signal: new AbortController().signal },
+			{ spawn, platform: 'win32' }
+		);
+		expect(result).toEqual({ ok: true });
+	});
+
 	it('rejects immediately when aborted before the locate step runs, without spawning the print run', async () => {
 		const { spawn, calls } = fakeSpawn({
 			run: (c, a) => locate(c, a) ?? { stdout: envelope({ ok: true }), code: 0 }

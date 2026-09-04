@@ -251,6 +251,7 @@ describe('severityOf — security', () => {
 			value: string | null;
 			severity: 'high' | 'medium' | 'low';
 			note: string;
+			weak?: boolean;
 		}>,
 		cookies: [] as Array<{
 			name: string;
@@ -386,6 +387,51 @@ describe('severityOf — security', () => {
 			]
 		});
 		expect(two.finding).toBe('2 security headers are missing, starting with X-Frame-Options.');
+	});
+
+	it('is Needs work when a high-severity header is present but weak', () => {
+		const s = ok({
+			headers: [
+				{
+					header: 'strict-transport-security',
+					present: true,
+					value: 'max-age=86400',
+					severity: 'high',
+					note: 'Present but max-age is under 180 days.',
+					weak: true
+				}
+			]
+		});
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toBe(
+			'1 security header is present but too weak to help, starting with Strict-Transport-Security.'
+		);
+	});
+
+	it('counts a missing header ahead of a weak one, and never calls a weak header missing', () => {
+		const s = ok({
+			headers: [
+				{
+					header: 'x-frame-options',
+					present: true,
+					value: 'ALLOW-FROM x',
+					severity: 'medium',
+					note: '',
+					weak: true
+				},
+				{
+					header: 'content-security-policy',
+					present: false,
+					value: null,
+					severity: 'high',
+					note: ''
+				}
+			]
+		});
+		expect(s).toMatchObject({ word: 'Poor', tone: 'fail' });
+		expect(s.finding).toBe(
+			'1 important security header is missing, starting with Content-Security-Policy.'
+		);
 	});
 
 	it('is Needs work when a cookie lacks Secure or HttpOnly', () => {
@@ -762,6 +808,25 @@ describe('severityOf — traffic-owned', () => {
 		expect(s.finding).toBe(
 			'10 clicks from 100 impressions in the last 90 days. GA4 is not connected.'
 		);
+	});
+
+	it('says the totals are not available when Search Console refused them', () => {
+		const noTotals = { status: 'ok' as const, data: { totals: null, topQueries: [] } };
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: noTotals, ga4: ga4(4321), range }
+		});
+		expect(s).toMatchObject({ word: 'Measured', tone: 'na' });
+		expect(s.finding).toBe('Search Console connected; totals not available; 4,321 GA4 sessions.');
+	});
+
+	it('says the totals are not available with GA4 also not connected', () => {
+		const noTotals = { status: 'ok' as const, data: { totals: null, topQueries: [] } };
+		const s = severityOf('traffic-owned', {
+			status: 'ok',
+			data: { searchConsole: noTotals, ga4: unavailable('No GA4 property id is set.'), range }
+		});
+		expect(s.finding).toBe('Search Console connected; totals not available. GA4 is not connected.');
 	});
 
 	it('is Measured when GA4 is ok but Search Console is not connected', () => {

@@ -3,8 +3,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 type FakePage = {
 	setViewport: (opts: unknown) => Promise<void>;
 	goto: (url: string, opts?: unknown) => Promise<void>;
-	waitForFunction: (fn: () => unknown, opts?: unknown) => Promise<unknown>;
-	evaluate: (fn: () => unknown) => Promise<Array<{ label: string; value: string }>>;
+	waitForFunction: (fn: string | (() => unknown), opts?: unknown) => Promise<unknown>;
+	evaluate: (
+		fn: () => unknown
+	) => Promise<Array<{ kind: 'label' | 'value'; text: string; parent: number }>>;
 	close: () => Promise<void>;
 };
 
@@ -201,11 +203,16 @@ describe('seoquake analyze', () => {
 	});
 
 	it('resolves with parsed toolbar data and closes the browser once', async () => {
-		const pairs = [
-			{ label: 'Rank', value: '38.5M' },
-			{ label: 'L', value: '213' },
-			{ label: 'LD', value: '435' },
-			{ label: 'PIN', value: '12' }
+		// The in-page extractor reports a flat node list; pairing happens in Node.
+		const nodes = [
+			{ kind: 'label' as const, text: 'Rank', parent: 0 },
+			{ kind: 'value' as const, text: '38.5M', parent: 0 },
+			{ kind: 'label' as const, text: 'L', parent: 1 },
+			{ kind: 'value' as const, text: '213', parent: 1 },
+			{ kind: 'label' as const, text: 'LD', parent: 2 },
+			{ kind: 'value' as const, text: '435', parent: 2 },
+			{ kind: 'label' as const, text: 'PIN', parent: 3 },
+			{ kind: 'value' as const, text: '12', parent: 3 }
 		];
 		state.launch = async () => {
 			state.launches++;
@@ -214,7 +221,7 @@ describe('seoquake analyze', () => {
 					setViewport: async () => {},
 					goto: async () => {},
 					waitForFunction: async () => {},
-					evaluate: async () => pairs,
+					evaluate: async () => nodes,
 					close: async () => {}
 				}),
 				close: async () => {
@@ -238,6 +245,93 @@ describe('seoquake analyze', () => {
 			raw: { Rank: '38.5M', L: '213', LD: '435', PIN: '12' }
 		});
 		expect(state.closes).toBe(1);
+	});
+});
+
+/**
+ * A stand-in for the page's DOM, shaped only as far as the in-page extractor
+ * reaches into it: a `seoquake-seobar` host with a shadow root of leaf spans,
+ * each bold-or-not and belonging to a named parent element.
+ */
+function fakeDocument(spans: Array<{ text: string; bold: boolean; parent: string }>): unknown {
+	const parents = new Map<string, object>();
+	const elements = spans.map((span) => {
+		if (!parents.has(span.parent)) parents.set(span.parent, { name: span.parent });
+		return {
+			querySelector: () => null,
+			textContent: span.text,
+			parentElement: parents.get(span.parent),
+			classList: { contains: (name: string) => name === 'font-semibold' && span.bold }
+		};
+	});
+	return {
+		querySelector: () => ({
+			shadowRoot: {
+				querySelectorAll: () => ({
+					forEach: (fn: (el: unknown) => void) => elements.forEach(fn)
+				})
+			}
+		})
+	};
+}
+
+/** Runs the source string the analyzer hands to `waitForFunction` against a fake DOM. */
+async function readyPredicate(
+	spans: Array<{ text: string; bold: boolean; parent: string }>
+): Promise<boolean> {
+	let source = '';
+	state.launch = async () => {
+		state.launches++;
+		return {
+			newPage: async () => ({
+				setViewport: async () => {},
+				goto: async () => {},
+				waitForFunction: async (fn: string | (() => unknown)) => {
+					source = String(fn);
+				},
+				evaluate: async () => [
+					{ kind: 'label' as const, text: 'Rank', parent: 0 },
+					{ kind: 'value' as const, text: '1', parent: 0 }
+				],
+				close: async () => {}
+			}),
+			close: async () => {
+				state.closes++;
+			}
+		};
+	};
+
+	await seoQuakeAnalyzer.analyze('https://example.com/', settings, new AbortController().signal);
+
+	return new Function('document', `return ${source};`)(fakeDocument(spans)) as boolean;
+}
+
+describe('seoquake toolbar-ready predicate', () => {
+	it('is not satisfied by a bold span with no label before it in its parent', async () => {
+		expect(await readyPredicate([{ text: '⬇', bold: true, parent: 'toolbar-icon' }])).toBe(false);
+	});
+
+	it('is not satisfied by a label with no value beside it', async () => {
+		expect(await readyPredicate([{ text: 'Rank', bold: false, parent: 'cell' }])).toBe(false);
+	});
+
+	it('is not satisfied when the only label lives in a different parent', async () => {
+		expect(
+			await readyPredicate([
+				{ text: 'Rank', bold: false, parent: 'cell' },
+				{ text: '38.5M', bold: true, parent: 'other' }
+			])
+		).toBe(false);
+	});
+
+	it('is satisfied once a value follows a label in the same parent', async () => {
+		expect(
+			await readyPredicate([
+				{ text: '⬇', bold: true, parent: 'toolbar-icon' },
+				{ text: 'Rank', bold: false, parent: 'cell' },
+				{ text: '38.5M', bold: true, parent: 'cell' }
+			])
+		).toBe(true);
 	});
 });
 

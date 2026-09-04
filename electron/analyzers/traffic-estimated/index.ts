@@ -4,6 +4,7 @@ import { fetchText } from '../../http';
 import {
 	classifyError,
 	errorCodeOf,
+	isNothingFound,
 	isQuotaError,
 	parseSemrushCsv,
 	toEstimatedTraffic
@@ -30,6 +31,10 @@ export function createTrafficEstimatedAnalyzer(
 		defaultSettings: { database: 'au' },
 
 		async preflight() {
+			// Only the presence of a saved key is checked. Semrush exposes the
+			// remaining API-unit balance solely through a paid call, so verifying
+			// the balance here would spend units on every preflight of every run;
+			// an exhausted balance is instead surfaced as UNAVAILABLE by analyze().
 			return (await credentials.has(SEMRUSH_CREDENTIAL_KEY))
 				? { available: true }
 				: { available: false, reason: 'No Semrush API key is saved in Settings.' };
@@ -75,7 +80,7 @@ export function createTrafficEstimatedAnalyzer(
 
 			// Semrush reports an unknown/unindexed domain as a normal response
 			// body, not an HTTP error, so it is an ok result with null figures.
-			if (/NOTHING FOUND/i.test(body)) {
+			if (isNothingFound(body)) {
 				return {
 					organicKeywords: null,
 					organicTraffic: null,

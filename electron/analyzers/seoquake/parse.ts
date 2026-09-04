@@ -14,8 +14,12 @@ function toNumber(cell: string | undefined): number | null {
 	if (trimmed === '') return null;
 	if (/^(n\/a|-|—)$/i.test(trimmed)) return null;
 
+	// Group separators are stripped first so an abbreviated value keeps every
+	// group: "1,234.5K" is 1,234.5 thousand, not 234.5 thousand.
+	const compact = trimmed.replace(/[, ]/g, '');
+
 	// Decimal with a K/M/B abbreviation suffix, e.g. "1.2K", "3.4M", "2B".
-	const abbreviated = trimmed.match(/(\d+(?:\.\d+)?)\s*([kmb])$/i);
+	const abbreviated = compact.match(/^(\d+(?:\.\d+)?)([kmb])$/i);
 	if (abbreviated) {
 		const value = parseFloat(abbreviated[1]);
 		const multiplier = SUFFIX_MULTIPLIERS[abbreviated[2].toLowerCase()];
@@ -25,12 +29,37 @@ function toNumber(cell: string | undefined): number | null {
 	// Any other letter suffix directly after a number is an unknown unit, not a count.
 	if (/\d\s*[a-zA-Z]+\s*$/.test(trimmed)) return null;
 
-	// Plain integer, possibly with ",", " " or "." used as a thousands separator.
-	let working = trimmed.replace(/[, ]/g, '');
-	working = working.replace(/\.(?=\d{3}(?!\d))/g, '');
+	if (compact.includes('.')) {
+		// Toolbar counts are integers, so a dot is only ever a thousands
+		// separator. "1.234" is 1234; "1.5" and "12.34" are not counts at all.
+		if (!/^\d{1,3}(?:\.\d{3})+$/.test(compact)) return null;
+		return Number(compact.replace(/\./g, ''));
+	}
 
-	const digits = working.replace(/[^\d]/g, '');
+	const digits = compact.replace(/[^\d]/g, '');
 	return digits.length > 0 ? Number(digits) : null;
+}
+
+/**
+ * Pairs the flat span list the in-page extractor reports with the labels that
+ * precede them. SEO Quake renders each metric as a label span followed by one
+ * or more value spans inside a shared parent, so a value takes the nearest
+ * preceding label in its own parent; a value with no such label is still
+ * reported, with an empty label, so a layout change shows up in `raw`.
+ */
+export function pairLabels(
+	nodes: Array<{ kind: 'label' | 'value'; text: string; parent: number }>
+): Array<{ label: string; value: string }> {
+	const lastLabel = new Map<number, string>();
+	const pairs: Array<{ label: string; value: string }> = [];
+	for (const node of nodes) {
+		if (node.kind === 'label') {
+			lastLabel.set(node.parent, node.text);
+		} else {
+			pairs.push({ label: lastLabel.get(node.parent) ?? '', value: node.text });
+		}
+	}
+	return pairs;
 }
 
 /**

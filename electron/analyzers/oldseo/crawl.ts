@@ -1,4 +1,5 @@
 import { stripHtml } from '../../discovery/homepage';
+import { readCapped } from '../../http';
 import type { HiddenReason, PageSnapshot, TextNode } from './snapshot';
 
 /**
@@ -33,7 +34,9 @@ export function sameSite(link: string, base: URL): string | null {
 		return null;
 	}
 	if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-	if (host(url.hostname) !== host(base.hostname)) return null;
+	// `host`, not `hostname`: a link to the same name on another port is a
+	// different origin and must not be crawled as if it were this site.
+	if (host(url.host) !== host(base.host)) return null;
 	const lower = url.pathname.toLowerCase();
 	if (SKIP_EXTENSIONS.some((ext) => lower.endsWith(ext))) return null;
 	url.hash = '';
@@ -112,7 +115,7 @@ export async function fetchAsGooglebot(
 		if (!response.ok) return null;
 		if (!/text\/html|application\/xhtml/i.test(response.headers.get('content-type') ?? ''))
 			return null;
-		const html = (await response.text()).slice(0, BOT_BYTE_CAP);
+		const html = await readCapped(response, BOT_BYTE_CAP);
 		return stripHtml(html).text;
 	} catch {
 		return null;
@@ -227,7 +230,10 @@ export function snapshotScript(): (url: string) => RawSnapshot {
 			if (!el || el.closest(SKIP_SELECTOR)) continue;
 			const hidden = hiddenReason(el, text);
 			if (!hidden) visible.push(text);
-			if (text.split(' ').length >= 3 || el.closest('a')) {
+			// Two words is enough: stuffed hidden phrases are often just
+			// "doors mandurah", and a node too short to record is a node the
+			// hidden-text detector never sees.
+			if (text.split(' ').length >= 2 || el.closest('a')) {
 				const a = el.closest('a');
 				nodes.push({ text, hidden, inLink: a ? a.getAttribute('href') : null });
 			}

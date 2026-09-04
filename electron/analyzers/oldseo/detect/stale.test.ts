@@ -37,6 +37,14 @@ describe('detectStale', () => {
 		expect(f.evidence).toBe('3 H1s share "garage doors"');
 	});
 
+	it('does not count "cart" as a hit for the top phrase "art"', () => {
+		const text = 'art art art art art art art art art art';
+		const title =
+			'Shopping Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart Cart';
+		expect(title.length).toBeGreaterThan(70);
+		expect(detectStale([makeSnapshot({ path: '/', title, visibleText: text })])).toEqual([]);
+	});
+
 	it('is quiet when the only shared phrase is a bare stop word', () => {
 		expect(detectStale([makeSnapshot({ path: '/', h1s: ['The Best', 'The Worst'] })])).toEqual([]);
 	});

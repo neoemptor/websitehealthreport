@@ -8,6 +8,16 @@ const SHORT_HIDDEN_WORDS = 8;
 const KEYWORD_HITS = 3;
 const TOP_PHRASES = 5;
 
+/**
+ * Whole-word phrase match. A substring test counts "art" inside "cart" and
+ * "sale" inside "wholesale", which is what turned ordinary hidden copy into a
+ * keyword hit.
+ */
+export function mentionsPhrase(text: string, phrase: string): boolean {
+	const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i').test(text);
+}
+
 export function detectHidden(pages: PageSnapshot[]): Finding[] {
 	const findings: Finding[] = [];
 	for (const page of pages) {
@@ -27,7 +37,7 @@ export function detectHidden(pages: PageSnapshot[]): Finding[] {
 			const count = words(node.text).length;
 			if (count < SHORT_HIDDEN_WORDS) continue;
 			const lower = node.text.toLowerCase();
-			const hits = top.filter((p) => lower.includes(p)).length;
+			const hits = top.filter((p) => mentionsPhrase(lower, p)).length;
 			if (count >= LONG_HIDDEN_WORDS || hits >= KEYWORD_HITS) {
 				findings.push({
 					check: 'hidden-text',

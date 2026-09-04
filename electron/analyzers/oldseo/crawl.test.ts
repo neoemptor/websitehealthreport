@@ -25,6 +25,12 @@ describe('sameSite', () => {
 		expect(sameSite('/brochure.pdf', base)).toBeNull();
 		expect(sameSite('/img/logo.PNG', base)).toBeNull();
 	});
+	it('rejects the same name on another port, which is another origin', () => {
+		expect(sameSite('https://www.example.com.au:8443/a', base)).toBeNull();
+		expect(sameSite('/a', new URL('https://www.example.com.au:8443/'))).toBe(
+			'https://www.example.com.au:8443/a'
+		);
+	});
 	it('normalises a trailing slash away except for the root path', () => {
 		expect(sameSite('/a/', base)).toBe(sameSite('/a', base));
 		expect(sameSite('/', base)).toBe('https://www.example.com.au/');
@@ -74,6 +80,33 @@ describe('fetchAsGooglebot', () => {
 		expect(
 			await fetchAsGooglebot('https://example.com/', new AbortController().signal, bad)
 		).toBeNull();
+	});
+
+	it('stops reading a huge body at the cap and cancels the rest', async () => {
+		let cancelled = false;
+		const chunk = new TextEncoder().encode('<p>' + 'a'.repeat(600_000) + '</p>');
+		const streaming = (async () =>
+			new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(chunk);
+						controller.enqueue(chunk);
+						controller.enqueue(chunk);
+						controller.close();
+					},
+					cancel() {
+						cancelled = true;
+					}
+				}),
+				{ status: 200, headers: { 'content-type': 'text/html' } }
+			)) as unknown as typeof fetch;
+		const text = await fetchAsGooglebot(
+			'https://example.com/',
+			new AbortController().signal,
+			streaming
+		);
+		expect(text).not.toBeNull();
+		expect(cancelled).toBe(true);
 	});
 });
 

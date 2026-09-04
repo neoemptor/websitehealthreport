@@ -8,7 +8,12 @@ export type GscTotals = {
 };
 
 export type GscData = {
-	totals: GscTotals;
+	/**
+	 * Null when the property answered the top-queries call but refused the
+	 * dimensionless totals call — the queries are real, so the report shows
+	 * them and says the totals are not available.
+	 */
+	totals: GscTotals | null;
 	topQueries: Array<{ query: string; clicks: number; impressions: number }>;
 };
 
@@ -64,8 +69,12 @@ const BASE_URL = 'https://searchconsole.googleapis.com/webmasters/v3';
  * Fetches Search Console totals and top queries for `host` (e.g.
  * "example.com", no protocol). Tries the `sc-domain:` domain property first,
  * then the URL-prefix property, since either may be the one the account has
- * verified; whichever answers 200 wins, and both the totals query and the
- * top-queries query then use that same property.
+ * verified; whichever answers the top-queries call with a 200 wins.
+ *
+ * Only the top-queries call decides which property to use. Once it has
+ * succeeded, a 403/404 on that same property's totals call is not a reason to
+ * try the other form — the account demonstrably has access here — so the
+ * queries are kept and the totals are reported as null.
  */
 export async function fetchSearchAnalytics(
 	host: string,
@@ -77,20 +86,15 @@ export async function fetchSearchAnalytics(
 
 	for (const siteUrl of siteUrls) {
 		const endpoint = `${BASE_URL}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`;
+
+		let topQueriesPayload: unknown;
 		try {
-			const topQueriesPayload = await postGoogleJson(
+			topQueriesPayload = await postGoogleJson(
 				endpoint,
 				accessToken,
 				{ ...range, dimensions: ['query'], rowLimit: 100 },
 				signal
 			);
-			// This property answered 200, so the dimensionless totals query for
-			// site-wide clicks/impressions/ctr/position uses the same property.
-			const totalsPayload = await postGoogleJson(endpoint, accessToken, { ...range }, signal);
-			return {
-				totals: parseSearchAnalyticsTotals(totalsPayload),
-				topQueries: parseSearchAnalytics(topQueriesPayload).topQueries
-			};
 		} catch (err) {
 			if (err instanceof GoogleApiError) {
 				if (err.httpStatus === 429) {
@@ -102,6 +106,28 @@ export async function fetchSearchAnalytics(
 			}
 			throw err;
 		}
+
+		let totals: GscTotals | null;
+		try {
+			totals = parseSearchAnalyticsTotals(
+				await postGoogleJson(endpoint, accessToken, { ...range }, signal)
+			);
+		} catch (err) {
+			if (err instanceof GoogleApiError) {
+				if (err.httpStatus === 429) {
+					throw new Error("UNAVAILABLE: Google's quota for this account is exhausted for now.");
+				}
+				if (err.httpStatus === 403 || err.httpStatus === 404) {
+					totals = null;
+				} else {
+					throw err;
+				}
+			} else {
+				throw err;
+			}
+		}
+
+		return { totals, topQueries: parseSearchAnalytics(topQueriesPayload).topQueries };
 	}
 
 	throw new Error(

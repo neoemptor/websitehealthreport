@@ -27,7 +27,14 @@ export class CredentialStore {
 	}
 
 	private async writeAll(envelope: Envelope): Promise<void> {
-		await fs.mkdir(path.dirname(this.file), { recursive: true, mode: 0o700 });
+		const dir = path.dirname(this.file);
+		await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+		// mkdir's mode only applies to a directory it actually creates, and the
+		// store lives inside Electron's userData directory, which almost always
+		// already exists — so the mode is set explicitly here. Best-effort: on
+		// Windows (and on a directory owned by someone else) chmod is a no-op or
+		// throws, and neither is a reason to refuse to save a credential.
+		await fs.chmod(dir, 0o700).catch(() => undefined);
 		const temp = `${this.file}.${process.pid}.${this.tempCounter++}.tmp`;
 		await fs.writeFile(temp, JSON.stringify(envelope), { encoding: 'utf-8', mode: 0o600 });
 		await fs.chmod(temp, 0o600);

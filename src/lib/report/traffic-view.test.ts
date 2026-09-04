@@ -47,10 +47,7 @@ describe('ownedView', () => {
 		expect(view.range).toEqual({ start: '2026-01-01', end: '2026-01-31', days: 30 });
 		expect(view.searchConsole).toEqual({
 			kind: 'ok',
-			clicks: 123,
-			impressions: 4567,
-			ctrPct: '2.69%',
-			position: '5.2',
+			totals: { clicks: 123, impressions: 4567, ctrPct: '2.69%', position: '5.2' },
 			topQueries: [{ query: 'hello world', clicks: 10, impressions: 100 }]
 		});
 		expect(view.ga4).toEqual({
@@ -82,6 +79,26 @@ describe('ownedView', () => {
 		if (view.searchConsole.kind === 'ok') {
 			expect(view.searchConsole.topQueries).toHaveLength(10);
 		}
+	});
+
+	it('keeps the queries and nulls the totals when Search Console refused them', () => {
+		const view = ownedView({
+			searchConsole: {
+				status: 'ok',
+				data: {
+					totals: null,
+					topQueries: [{ query: 'hello world', clicks: 10, impressions: 100 }]
+				}
+			},
+			ga4: { status: 'unavailable', reason: 'not connected' },
+			range: { start: '2026-01-01', end: '2026-01-31' }
+		});
+
+		expect(view.searchConsole).toEqual({
+			kind: 'ok',
+			totals: null,
+			topQueries: [{ query: 'hello world', clicks: 10, impressions: 100 }]
+		});
 	});
 
 	it('preserves a genuine unavailable reason', () => {

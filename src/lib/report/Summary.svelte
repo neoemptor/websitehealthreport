@@ -49,6 +49,24 @@
 		.sort((a, b) => b.grade.ratio - a.grade.ratio || a.domain.localeCompare(b.domain));
 	$: ordered = client ? [client, ...competitors] : competitors;
 
+	// The table is on its side: one row per check, one column per site. Ten
+	// checks in narrow columns fell below the print type floor, so a check
+	// now gets a whole row and its full name.
+	type CheckRow = {
+		id: AnalyzerId;
+		label: string;
+		cells: Array<{ word: string; tone: string }>;
+	};
+
+	$: checkRows = run.enabledAnalyzers.map<CheckRow>((id) => ({
+		id,
+		label: analyzerName(id),
+		cells: ordered.map((row) => {
+			const cell = row.cells.find((c) => c.id === id)!;
+			return { word: cell.word, tone: cell.tone };
+		})
+	}));
+
 	// One plain sentence: where the client sits among the competitors.
 	function sentence(): string {
 		if (!client) return '';
@@ -75,61 +93,63 @@
 
 <!-- The summary: the verdict before the evidence. A reader who stops here
      knows where the client stands; everything beneath is the working. -->
-<section class="mt-8 break-inside-avoid">
-	<h2 class="font-heading text-[19px] font-bold text-primary-800">Summary</h2>
+<section class="mt-8">
+	<h2 class="font-heading text-[19px] font-bold text-primary-800 break-after-avoid">Summary</h2>
 	{#if client}
-		<p class="mt-1.5 text-[13px] leading-relaxed text-dark-700">{sentence()}</p>
+		<p class="mt-1.5 text-[13px] leading-relaxed text-dark-700 break-after-avoid">{sentence()}</p>
 	{/if}
 
 	<div class="mt-3 overflow-x-auto print:overflow-visible">
 		<table class="w-full border-collapse text-left">
 			<thead>
-				<tr class="border-b border-dark-200">
-					<th class="py-1.5 pr-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
-						>Site</th
+				<tr class="border-b border-dark-200 break-after-avoid">
+					<th
+						class="w-[34%] py-1.5 pr-1 text-[10px] font-semibold uppercase tracking-wide text-dark-500"
 					>
-					{#each run.enabledAnalyzers as id}
-						<th
-							class="py-1.5 pr-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
-						>
-							{analyzerName(id)}
+						Check
+					</th>
+					{#each ordered as row (row.domain)}
+						<th class="py-1.5 pr-1 align-bottom">
+							<span class="block break-all font-mono text-[11px] leading-tight text-dark-700"
+								>{row.domain}</span
+							>
+							<span class="mt-0.5 block text-[10px] uppercase tracking-[0.08em] text-dark-500"
+								>{row.role}</span
+							>
 						</th>
 					{/each}
-					<th
-						class="w-16 py-1.5 text-right text-[10px] font-semibold uppercase tracking-[0.1em] text-dark-500"
-					>
-						Grade
-					</th>
 				</tr>
 			</thead>
 			<tbody>
-				{#each ordered as row (row.domain)}
+				{#each checkRows as check (check.id)}
 					<tr class="break-inside-avoid border-b border-dark-200/70 last:border-0">
-						<td class="py-2 pr-3 align-top">
-							<span class="block font-mono text-[12px] text-dark-700">{row.domain}</span>
-							<span class="block text-[10px] uppercase tracking-[0.12em] text-dark-500"
-								>{row.role}</span
-							>
+						<td class="py-2 pr-1 align-top text-[12px] text-dark-700">
+							{check.label}
 						</td>
-						{#each row.cells as cell}
+						{#each check.cells as cell}
 							<td
-								class="py-2 pr-3 align-top text-[11px] font-semibold uppercase tracking-wide {tone[
+								class="py-2 pr-1 align-top text-[10px] font-semibold uppercase tracking-wide {tone[
 									cell.tone
 								]}"
 							>
 								{cell.word}
 							</td>
 						{/each}
+					</tr>
+				{/each}
+				<tr class="break-inside-avoid break-before-avoid">
+					<td class="py-2 pr-1 align-top text-[12px] text-dark-700">Grade</td>
+					{#each ordered as row (row.domain)}
 						<td
-							class="py-2 text-right align-top font-heading text-[20px] font-bold leading-none {row
-								.grade.letter === '—'
+							class="py-2 pr-1 align-top font-heading text-[20px] font-bold leading-none {row.grade
+								.letter === '—'
 								? 'text-dark-400'
 								: 'text-dark-700'}"
 						>
 							{row.grade.letter}
 						</td>
-					</tr>
-				{/each}
+					{/each}
+				</tr>
 			</tbody>
 		</table>
 	</div>

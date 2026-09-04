@@ -1,3 +1,18 @@
+export const ABORT_MESSAGE = 'Aborted: the task timed out or the run was cancelled.';
+
+/**
+ * The one error type every abort path throws, so a caller can branch on the
+ * type rather than on the shape of a message. The message is unchanged, since
+ * older callers still match it (and errors from libraries we do not own never
+ * carry the type).
+ */
+export class AbortedError extends Error {
+	constructor(message: string = ABORT_MESSAGE) {
+		super(message);
+		this.name = 'AbortedError';
+	}
+}
+
 /**
  * A promise that rejects as soon as `signal` aborts, with the cleanup for its
  * listener.
@@ -16,7 +31,7 @@ export function rejectOnAbort(signal: AbortSignal): {
 	let listener: (() => void) | null = null;
 
 	const promise = new Promise<never>((_, reject) => {
-		const fail = () => reject(new Error('Aborted: the task timed out or the run was cancelled.'));
+		const fail = () => reject(new AbortedError());
 		if (signal.aborted) {
 			fail();
 			return;

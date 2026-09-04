@@ -6,6 +6,8 @@ export type HeaderFinding = {
 	value: string | null;
 	severity: Severity;
 	note: string;
+	/** Present, but with a value that does not actually do the header's job. */
+	weak?: boolean;
 };
 
 export type CookieFinding = {
@@ -65,22 +67,46 @@ const CHECKS: HeaderCheck[] = [
 	}
 ];
 
+/** Six months, the value the major preload lists ask for. */
+const HSTS_MIN_MAX_AGE = 15_552_000;
+
+/**
+ * A present header can still be useless: X-Frame-Options with anything but
+ * DENY or SAMEORIGIN (ALLOW-FROM was dropped by every current browser) allows
+ * framing, and a short HSTS max-age leaves most visits unprotected. These are
+ * reported as present-but-weak rather than as a pass.
+ */
+function weakness(header: string, value: string): string | null {
+	const v = value.trim();
+	if (header === 'x-frame-options') {
+		return /^(deny|sameorigin)$/i.test(v) ? null : 'Present but allows framing.';
+	}
+	if (header === 'strict-transport-security') {
+		const maxAge = /max-age\s*=\s*"?(\d+)"?/i.exec(v);
+		const seconds = maxAge ? Number(maxAge[1]) : 0;
+		return seconds < HSTS_MIN_MAX_AGE ? 'Present but max-age is under 180 days.' : null;
+	}
+	return null;
+}
+
 export function parseSecurityHeaders(headers: Headers): HeaderFinding[] {
 	return CHECKS.map((check) => {
 		const value = headers.get(check.header);
 		const present = value !== null;
+		const weak = present && !check.badWhenPresent ? weakness(check.header, value) : null;
 
 		return {
 			header: check.header,
 			present,
 			value,
 			severity: check.severity,
+			weak: weak !== null,
 			note: check.badWhenPresent
 				? present
 					? check.note
 					: 'Not disclosed.'
 				: present
-				? 'Present.'
+				? weak ?? 'Present.'
 				: check.note
 		};
 	});

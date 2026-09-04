@@ -55,6 +55,25 @@ describe('detectHidden', () => {
 		expect(out[0].evidence).toMatch(/2 hidden blocks/);
 	});
 
+	it('counts a keyword only as a whole word, not as a substring', () => {
+		// "art", "sale" and "door" are the page's top phrases; the hidden block
+		// contains only "cart", "wholesale" and "doorway", which are other words.
+		const page = makeSnapshot({
+			path: '/shop',
+			visibleText: 'art sale door art sale door art sale door',
+			nodes: [
+				{
+					text: 'add to cart for wholesale pricing along the doorway of the shed',
+					hidden: 'display-none',
+					inLink: null
+				}
+			]
+		});
+		const out = detectHidden([page]);
+		expect(out).toHaveLength(1);
+		expect(out[0]).toMatchObject({ severity: 'low' });
+	});
+
 	it('flags hidden links as high with the target', () => {
 		const page = makeSnapshot({
 			path: '/',

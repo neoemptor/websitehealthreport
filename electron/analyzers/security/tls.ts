@@ -63,6 +63,10 @@ export function inspectTls(hostname: string, signal?: AbortSignal): Promise<TlsI
 						authorizationError: socket.authorizationError ? String(socket.authorizationError) : null
 					};
 					cleanup();
+					// Clear the 10s idle timer before tearing the socket down, so a
+					// late timeout can never fire against a socket that already
+					// answered.
+					socket.setTimeout(0);
 					socket.destroy();
 					resolve(info);
 				} catch (error) {

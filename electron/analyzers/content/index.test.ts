@@ -45,7 +45,7 @@ vi.mock('./grammar', async () => {
 	return { ...actual, checkGrammar };
 });
 
-const { contentAnalyzer } = await import('./index');
+const { contentAnalyzer, MAX_GRAMMAR_CHARS } = await import('./index');
 
 /** A browser whose page never finishes loading, so only an abort ends the work. */
 function hangingBrowser(): FakeBrowser {
@@ -152,6 +152,37 @@ describe('content analyze', () => {
 
 		expect(data.grammar).toEqual(failed);
 		expect(data.spelling).toBeDefined();
+	});
+
+	it('caps the text sent to the grammar checker at MAX_GRAMMAR_CHARS', async () => {
+		// LanguageTool rejects very large payloads, so an over-long page must be
+		// truncated before it is sent rather than failing the whole check.
+		const longText = 'word '.repeat(MAX_GRAMMAR_CHARS);
+		state.launch = async () => readyBrowser(longText);
+		checkGrammar.mockResolvedValue({ status: 'ok', matches: [] } as unknown as GrammarState);
+
+		await contentAnalyzer.analyze(
+			'https://example.com/',
+			{ ignoreWords: [], grammar: { provider: 'languagetool-public' } },
+			new AbortController().signal
+		);
+
+		expect(longText.length).toBeGreaterThan(MAX_GRAMMAR_CHARS);
+		const sent = checkGrammar.mock.calls[0][0] as string;
+		expect(sent).toHaveLength(MAX_GRAMMAR_CHARS);
+		expect(sent).toBe(longText.slice(0, MAX_GRAMMAR_CHARS));
+	});
+
+	it('suppresses a misspelling listed in settings.ignoreWords', async () => {
+		state.launch = async () => readyBrowser('This has a mispeling in it.');
+
+		const withIgnore = await contentAnalyzer.analyze(
+			'https://example.com/',
+			{ ignoreWords: ['mispeling'], grammar: { provider: 'off' } },
+			new AbortController().signal
+		);
+
+		expect(withIgnore.spelling.misspellings.some((m) => m.word === 'mispeling')).toBe(false);
 	});
 
 	it('closes the browser and rejects when its signal aborts', async () => {

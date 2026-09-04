@@ -3,6 +3,8 @@
  * service area. Everything here is data that will be quoted into a prompt
  * inside a fenced block; nothing in it is executed or trusted.
  */
+import { readCapped } from '../http';
+
 export type Homepage = { title: string; description: string; text: string };
 export type FetchFn = typeof fetch;
 
@@ -24,38 +26,56 @@ function decodeEntities(s: string): string {
 
 const squash = (s: string) => decodeEntities(s).replace(/\s+/g, ' ').trim();
 
-export function stripHtml(html: string): Homepage {
-	const title = squash(/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] ?? '');
-	const description = squash(
-		/<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i.exec(html)?.[1] ??
-			/<meta[^>]+content=["']([^"']*)["'][^>]+name=["']description["']/i.exec(html)?.[1] ??
-			''
-	);
-	const body = /<body[^>]*>([\s\S]*)<\/body>/i.exec(html)?.[1] ?? html;
-	const text = squash(
-		body
-			.replace(/<(script|style|noscript|svg|template)[^>]*>[\s\S]*?<\/\1>/gi, ' ')
-			.replace(/<!--[\s\S]*?-->/g, ' ')
-			.replace(/<[^>]+>/g, ' ')
-	).slice(0, TEXT_CAP);
-	return { title, description, text };
+/**
+ * The attribute run inside a tag: anything but a quote or `>`, with quoted
+ * runs allowed to contain `>` (`<a title="a > b">` is one tag, not two).
+ */
+const ATTRS = `(?:"[^"]*"|'[^']*'|[^'">])*`;
+/** A tag, its closing `>` optional so a tag truncated by the cap is still eaten. */
+const TAG = new RegExp(`<[!/]?[a-zA-Z][^\\s>'"/]*${ATTRS}(?:["'][^"']*$)?>?`, 'g');
+const RAW_ELEMENT = new RegExp(
+	`<(script|style|noscript|svg|template)${ATTRS}>[\\s\\S]*?<\\/\\1\\s*>`,
+	'gi'
+);
+
+/**
+ * Removes markup, leaving the words. Regex tag matching can never be a
+ * parser, but it must not be fooled by the two things real pages do: a `>`
+ * inside a quoted attribute value, and a tag left unclosed at the end of a
+ * truncated body.
+ */
+export function stripTags(html: string): string {
+	return html
+		.replace(RAW_ELEMENT, ' ')
+		.replace(/<!--[\s\S]*?-->/g, ' ')
+		.replace(TAG, ' ');
 }
 
-async function readCapped(response: Response): Promise<string> {
-	const reader = response.body?.getReader();
-	if (!reader) return (await response.text()).slice(0, BYTE_CAP);
-	const decoder = new TextDecoder();
-	let text = '';
-	let received = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		received += value.byteLength;
-		text += decoder.decode(value, { stream: true });
-		if (received >= BYTE_CAP) break;
-	}
-	text += decoder.decode();
-	return text;
+/**
+ * The three extractors below open their tag with `ATTRS` for the same reason
+ * `TAG` does: a `>` inside a quoted attribute value (`<body data-x="a>b">`)
+ * must not be mistaken for the end of the tag.
+ */
+const TITLE = new RegExp(`<title${ATTRS}>([\\s\\S]*?)<\\/title\\s*>`, 'i');
+const BODY = new RegExp(`<body${ATTRS}>([\\s\\S]*)<\\/body\\s*>`, 'i');
+const DESCRIPTION = new RegExp(
+	`<meta${ATTRS}name=["']description["']${ATTRS}content=["']([^"']*)["']`,
+	'i'
+);
+/** The same, for the attributes written the other way round. */
+const DESCRIPTION_REVERSED = new RegExp(
+	`<meta${ATTRS}content=["']([^"']*)["']${ATTRS}name=["']description["']`,
+	'i'
+);
+
+export function stripHtml(html: string): Homepage {
+	const title = squash(TITLE.exec(html)?.[1] ?? '');
+	const description = squash(
+		DESCRIPTION.exec(html)?.[1] ?? DESCRIPTION_REVERSED.exec(html)?.[1] ?? ''
+	);
+	const body = BODY.exec(html)?.[1] ?? html;
+	const text = squash(stripTags(body)).slice(0, TEXT_CAP);
+	return { title, description, text };
 }
 
 async function fetchWithRedirects(
@@ -102,7 +122,7 @@ export async function fetchHomepage(
 		const type = response.headers.get('content-type') ?? '';
 		if (!/text\/html|application\/xhtml/i.test(type))
 			throw new Error('The address is not an HTML page.');
-		const html = (await readCapped(response)).slice(0, BYTE_CAP);
+		const html = await readCapped(response, BYTE_CAP);
 		return stripHtml(html);
 	} finally {
 		clearTimeout(timer);

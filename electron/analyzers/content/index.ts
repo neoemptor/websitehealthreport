@@ -13,7 +13,7 @@ export type ContentData = {
 };
 
 /** LanguageTool rejects very large payloads, and a page's worth is plenty. */
-const MAX_GRAMMAR_CHARS = 20_000;
+export const MAX_GRAMMAR_CHARS = 20_000;
 
 export const contentAnalyzer: Analyzer<ContentSettings> = {
 	id: 'content',

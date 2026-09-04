@@ -7,11 +7,14 @@ import {
 	words,
 	type PageSnapshot
 } from '../snapshot';
+import { mentionsPhrase } from './hidden';
 
 const NOISE_ROBOTS = new Set(['index', 'follow', 'index,follow', 'index, follow', 'all']);
 const TITLE_MAX_CHARS = 70;
 const TITLE_KEYWORD_HITS = 3;
 const TOP_PHRASES = 5;
+/** How much of a meta keywords tag is quoted back as evidence. */
+const KEYWORDS_EVIDENCE_CHARS = 100;
 
 /** The longest 1–3-gram present in every H1, or null. */
 function sharedPhrase(h1s: string[]): string | null {
@@ -42,7 +45,10 @@ export function detectStale(pages: PageSnapshot[]): Finding[] {
 
 	for (const page of pages) {
 		if (page.metaKeywords && page.metaKeywords.trim())
-			add(page.path, `meta keywords tag: "${page.metaKeywords.trim().slice(0, 100)}"`);
+			add(
+				page.path,
+				`meta keywords tag: "${page.metaKeywords.trim().slice(0, KEYWORDS_EVIDENCE_CHARS)}"`
+			);
 
 		const robots = page.metaRobots?.trim().toLowerCase();
 		if (robots && NOISE_ROBOTS.has(robots))
@@ -51,7 +57,7 @@ export function detectStale(pages: PageSnapshot[]): Finding[] {
 		if (page.title.length > TITLE_MAX_CHARS) {
 			const top = topPhrases(page.visibleText, TOP_PHRASES).map((t) => t.phrase);
 			const lower = page.title.toLowerCase();
-			if (top.filter((p) => lower.includes(p)).length >= TITLE_KEYWORD_HITS)
+			if (top.filter((p) => mentionsPhrase(lower, p)).length >= TITLE_KEYWORD_HITS)
 				add(page.path, `title of ${page.title.length} characters: "${page.title}"`);
 		}
 

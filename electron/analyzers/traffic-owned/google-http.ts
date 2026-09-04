@@ -16,6 +16,9 @@ export class GoogleApiError extends Error {
 }
 
 function scrubToken(message: string, accessToken: string): string {
+	// Splitting on an empty string would explode the message into single
+	// characters joined by "[token]", so an absent token leaves it untouched.
+	if (accessToken === '') return message;
 	return message.split(accessToken).join('[token]');
 }
 

@@ -5,6 +5,7 @@
 		value: string | null;
 		severity: 'high' | 'medium' | 'low';
 		note: string;
+		weak?: boolean;
 	};
 	type CookieFinding = {
 		name: string;
@@ -118,7 +119,11 @@
 					<span class="block text-[10.5px] text-dark-500">{finding.note}</span>
 				</td>
 				<td class="w-28 py-2 text-right">
-					{#if finding.present}
+					{#if finding.present && finding.weak}
+						<span class="text-[10px] font-semibold uppercase tracking-wide text-dark-700">
+							Weak
+						</span>
+					{:else if finding.present}
 						<span class="text-[10px] font-semibold uppercase tracking-wide text-ok">Present</span>
 					{:else}
 						<span

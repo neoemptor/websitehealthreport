@@ -150,7 +150,13 @@
 				.map((l) => l.trim().toLowerCase())
 				.filter(Boolean)
 		);
-		const fresh = ticked.filter((d) => !present.has(d.toLowerCase()));
+		const fresh: string[] = [];
+		for (const d of ticked) {
+			const key = d.toLowerCase();
+			if (present.has(key)) continue;
+			present.add(key);
+			fresh.push(d);
+		}
 		competitorText = [...competitorText.split('\n').filter((l) => l.trim()), ...fresh].join('\n');
 		discovery = null;
 		ticked = [];

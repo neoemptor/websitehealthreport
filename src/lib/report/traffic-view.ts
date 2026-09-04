@@ -19,13 +19,22 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 export type TrafficRange = { start: string; end: string; days: number };
 
+export type SearchConsoleTotalsView = {
+	clicks: number;
+	impressions: number;
+	ctrPct: string;
+	position: string;
+};
+
 export type SearchConsoleView =
 	| {
 			kind: 'ok';
-			clicks: number;
-			impressions: number;
-			ctrPct: string;
-			position: string;
+			/**
+			 * Null when Search Console answered the queries but refused the
+			 * site-wide totals: the queries are still worth showing, so the
+			 * totals rows are omitted and a line says they are not available.
+			 */
+			totals: SearchConsoleTotalsView | null;
 			topQueries: Array<{ query: string; clicks: number; impressions: number }>;
 	  }
 	| { kind: 'unavailable'; reason: string };
@@ -64,6 +73,20 @@ function isValidTopQuery(v: unknown): v is { query: string; clicks: number; impr
 	return isString(v.query) && isNumber(v.clicks) && isNumber(v.impressions);
 }
 
+function buildSearchConsoleTotals(v: unknown): SearchConsoleTotalsView | null {
+	if (!isRecord(v)) return null;
+	const { clicks, impressions, ctr, position } = v;
+	if (!isNumber(clicks) || !isNumber(impressions) || !isNumber(ctr) || !isNumber(position)) {
+		return null;
+	}
+	return {
+		clicks,
+		impressions,
+		ctrPct: `${(ctr * 100).toFixed(2)}%`,
+		position: position.toFixed(1)
+	};
+}
+
 function buildSearchConsole(v: unknown): SearchConsoleView {
 	if (!isRecord(v)) return { kind: 'unavailable', reason: UNAVAILABLE_REASON };
 	if (v.status === 'unavailable') {
@@ -73,24 +96,16 @@ function buildSearchConsole(v: unknown): SearchConsoleView {
 
 	const data = v.data;
 	if (!isRecord(data)) return { kind: 'unavailable', reason: UNAVAILABLE_REASON };
-	const totals = data.totals;
-	if (!isRecord(totals)) return { kind: 'unavailable', reason: UNAVAILABLE_REASON };
-	const { clicks, impressions, ctr, position } = totals;
-	if (!isNumber(clicks) || !isNumber(impressions) || !isNumber(ctr) || !isNumber(position)) {
+
+	// The queries list is what makes this a Search Console reading at all: a
+	// payload without one is malformed, whereas missing totals is a state the
+	// API itself can produce.
+	if (!Array.isArray(data.topQueries)) {
 		return { kind: 'unavailable', reason: UNAVAILABLE_REASON };
 	}
+	const topQueries = data.topQueries.filter(isValidTopQuery).slice(0, 10);
 
-	const rawTopQueries = Array.isArray(data.topQueries) ? data.topQueries : [];
-	const topQueries = rawTopQueries.filter(isValidTopQuery).slice(0, 10);
-
-	return {
-		kind: 'ok',
-		clicks,
-		impressions,
-		ctrPct: `${(ctr * 100).toFixed(2)}%`,
-		position: position.toFixed(1),
-		topQueries
-	};
+	return { kind: 'ok', totals: buildSearchConsoleTotals(data.totals), topQueries };
 }
 
 function buildGa4(v: unknown): Ga4View {

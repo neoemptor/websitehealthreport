@@ -11,7 +11,6 @@ export const PLACES: Set<string> = new Set(
 		'nsw',
 		'new south wales',
 		'vic',
-		'victoria',
 		'qld',
 		'queensland',
 		'sa',
@@ -43,7 +42,6 @@ export const PLACES: Set<string> = new Set(
 		'armadale',
 		'canning vale',
 		'cockburn',
-		'success',
 		'bunbury',
 		'busselton',
 		'geraldton',
@@ -137,7 +135,6 @@ export const PLACES: Set<string> = new Set(
 		'lancelin',
 		'jurien bay',
 		'northam',
-		'york',
 		'toodyay',
 		'serpentine',
 		'jarrahdale',
@@ -195,8 +192,6 @@ export const PLACES: Set<string> = new Set(
 		'burwood',
 		'blue mountains',
 		'katoomba',
-		'richmond',
-		'windsor',
 		'castle hill',
 		'baulkham hills',
 		'coffs harbour',
@@ -204,7 +199,6 @@ export const PLACES: Set<string> = new Set(
 		'tamworth',
 		'armidale',
 		'dubbo',
-		'orange',
 		'bathurst',
 		'wagga wagga',
 		'albury',
@@ -247,7 +241,6 @@ export const PLACES: Set<string> = new Set(
 		'rosebud',
 		'traralgon',
 		'morwell',
-		'sale',
 		'wodonga',
 		'wangaratta',
 		'horsham',
@@ -271,7 +264,6 @@ export const PLACES: Set<string> = new Set(
 		'caboolture',
 		'moreton bay',
 		'redland',
-		'cleveland',
 		'southport',
 		'surfers paradise',
 		'robina',
@@ -294,12 +286,10 @@ export const PLACES: Set<string> = new Set(
 		'port lincoln',
 		'murray bridge',
 		'gawler',
-		'elizabeth',
 		'salisbury',
 		'modbury',
 		'tea tree gully',
 		'glenelg',
-		'marion',
 		'noarlunga',
 		'mount barker',
 		'victor harbor',
@@ -308,7 +298,6 @@ export const PLACES: Set<string> = new Set(
 		'launceston',
 		'devonport',
 		'burnie',
-		'kingston',
 		'glenorchy',
 		'alice springs',
 		'palmerston',
@@ -318,5 +307,26 @@ export const PLACES: Set<string> = new Set(
 		'woden',
 		'gungahlin',
 		'queanbeyan'
+	].map((p) => p.toLowerCase())
+);
+
+/**
+ * Place names that are also ordinary English words. Kept out of PLACES so a
+ * "Success Stories" or a "Winter sale" is never read as a doorway page: these
+ * only count as a place when the title itself capitalises them.
+ */
+export const AMBIGUOUS_PLACES: Set<string> = new Set(
+	[
+		'success',
+		'sale',
+		'york',
+		'kingston',
+		'richmond',
+		'windsor',
+		'elizabeth',
+		'victoria',
+		'orange',
+		'cleveland',
+		'marion'
 	].map((p) => p.toLowerCase())
 );

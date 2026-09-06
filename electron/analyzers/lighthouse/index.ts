@@ -14,11 +14,15 @@ export type LighthouseSettings = { formFactor: 'mobile' | 'desktop' };
 export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 	id: 'lighthouse',
 	label: 'Lighthouse',
-	// Two Lighthouse instances launched together trip over each other's
-	// performance marks ("start lh:driver:navigate" / "lh:gather:getBenchmarkIndex"
-	// not set), failing intermittently. One at a time is reliable and still
-	// the slowest-but-bounded check.
-	concurrency: 'serial',
+	// Exclusive, for two reasons. Two Lighthouse instances launched together
+	// trip over each other's performance marks ("start lh:driver:navigate" /
+	// "lh:gather:getBenchmarkIndex" not set), failing intermittently. And the
+	// performance score is a timing measurement: Lighthouse simulates its
+	// throttling on top of how long the main thread actually took, so any
+	// other analyzer competing for the CPU inflates TBT and LCP and drags the
+	// score below what PageSpeed Insights reports for the same page. Running
+	// alone costs wall-clock time and buys a number that means something.
+	concurrency: 'exclusive',
 	timeoutMs: 120_000,
 	defaultSettings: { formFactor: 'mobile' },
 

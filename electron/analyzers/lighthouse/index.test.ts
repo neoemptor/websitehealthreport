@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const DESKTOP_CONFIG = { extends: 'lighthouse:default', settings: { formFactor: 'desktop' } };
+
 const state = vi.hoisted(() => ({
 	kills: 0,
 	launches: 0,
+	args: [] as unknown[],
 	runLighthouse: async (): Promise<unknown> => ({ lhr: {} })
 }));
 
@@ -21,7 +24,15 @@ vi.mock('../../esm', () => ({
 				}),
 				Launcher: { getInstallations: () => ['/usr/bin/chrome'] }
 			};
-		if (specifier === 'lighthouse') return { default: () => state.runLighthouse() };
+		if (specifier === 'lighthouse')
+			return {
+				default: (...args: unknown[]) => {
+					state.args = args;
+					return state.runLighthouse();
+				}
+			};
+		if (specifier === 'lighthouse/core/config/desktop-config.js')
+			return { default: DESKTOP_CONFIG };
 		throw new Error('unexpected import ' + specifier);
 	}
 }));
@@ -31,11 +42,48 @@ const { lighthouseAnalyzer } = await import('./index');
 beforeEach(() => {
 	state.kills = 0;
 	state.launches = 0;
+	state.args = [];
 	// Never resolves: only an abort can end this task.
 	state.runLighthouse = () => new Promise(() => {});
 });
 
 describe('lighthouse analyze', () => {
+	// A desktop run configured with formFactor alone keeps Lighthouse's default
+	// mobile throttling (4x CPU slowdown, slow 4G), which scores a desktop page
+	// tens of points below PageSpeed Insights. The desktop config carries the
+	// throttling, screen emulation and user agent that PSI's desktop strategy
+	// uses, so it has to reach Lighthouse.
+	it('runs the desktop form factor with the desktop config', async () => {
+		state.runLighthouse = async () => ({ lhr: { categories: {}, audits: {} } });
+
+		await expect(
+			lighthouseAnalyzer.analyze(
+				'https://example.com/',
+				{ formFactor: 'desktop' },
+				new AbortController().signal
+			)
+		).rejects.toThrow();
+
+		expect(state.args[1]).toMatchObject({ formFactor: 'desktop' });
+		expect(state.args[1]).not.toHaveProperty('screenEmulation');
+		expect(state.args[2]).toBe(DESKTOP_CONFIG);
+	});
+
+	it('runs the mobile form factor on the default config', async () => {
+		state.runLighthouse = async () => ({ lhr: { categories: {}, audits: {} } });
+
+		await expect(
+			lighthouseAnalyzer.analyze(
+				'https://example.com/',
+				{ formFactor: 'mobile' },
+				new AbortController().signal
+			)
+		).rejects.toThrow();
+
+		expect(state.args[1]).toMatchObject({ formFactor: 'mobile' });
+		expect(state.args[2]).toBeUndefined();
+	});
+
 	it('kills Chrome and rejects when its signal aborts', async () => {
 		// Without this the scheduler's timeout releases the concurrency slot
 		// while Chrome is still running, so a capped-at-two analyzer ends up

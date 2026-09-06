@@ -23,12 +23,16 @@ type FormFactor = (typeof FORM_FACTORS)[number];
 export const lighthouseAnalyzer: Analyzer<LighthouseSettings> = {
 	id: 'lighthouse',
 	label: 'Lighthouse',
-	// Two Lighthouse instances launched together trip over each other's
-	// performance marks ("start lh:driver:navigate" / "lh:gather:getBenchmarkIndex"
-	// not set), failing intermittently. One at a time is reliable and still
-	// the slowest-but-bounded check. The mobile and desktop passes below are
-	// sequential for the same reason.
-	concurrency: 'serial',
+	// Exclusive, for two reasons. Two Lighthouse instances launched together
+	// trip over each other's performance marks ("start lh:driver:navigate" /
+	// "lh:gather:getBenchmarkIndex" not set), failing intermittently — which is
+	// also why the two passes below are sequential. And the performance score
+	// is a timing measurement: Lighthouse simulates its throttling on top of
+	// how long the main thread actually took, so any other analyzer competing
+	// for the CPU inflates TBT and LCP and drags the score below what
+	// PageSpeed Insights reports for the same page. Running alone costs
+	// wall-clock time and buys a number that means something.
+	concurrency: 'exclusive',
 	// Two passes, so twice the budget of the single-pass version.
 	timeoutMs: 240_000,
 	defaultSettings: {},

@@ -76,6 +76,72 @@ describe('runTasks', () => {
 		expect(maxActive).toBe(2);
 	});
 
+	it('runs nothing else while an exclusive task runs', async () => {
+		// The point of the mode: an analyzer whose result is a timing
+		// measurement must not share the CPU with the rest of the run.
+		let active = 0;
+		let seenDuringExclusive = 0;
+		const track = (exclusive: boolean) => async (): Promise<null> => {
+			active++;
+			if (exclusive) seenDuringExclusive = Math.max(seenDuringExclusive, active);
+			await new Promise((r) => setTimeout(r, 10));
+			active--;
+			return null;
+		};
+
+		const seen = await settle([
+			task('p1', 'parallel', track(false)),
+			task('p2', 'parallel', track(false)),
+			task('x', 'exclusive', track(true)),
+			task('s1', 'serial', track(false)),
+			task('l1', 'limited', track(false))
+		]);
+
+		expect(seenDuringExclusive).toBe(1);
+		expect(seen).toHaveLength(5);
+		expect(seen.every(([, status]) => status === 'ok')).toBe(true);
+	});
+
+	it('never runs two exclusive tasks at once', async () => {
+		let active = 0;
+		let maxActive = 0;
+		const exclusive = (key: string) =>
+			task(key, 'exclusive', async () => {
+				active++;
+				maxActive = Math.max(maxActive, active);
+				await new Promise((r) => setTimeout(r, 10));
+				active--;
+				return null;
+			});
+
+		await settle([exclusive('x1'), exclusive('x2'), exclusive('x3')]);
+		expect(maxActive).toBe(1);
+	});
+
+	it('does not let a stream of parallel tasks starve an exclusive one', async () => {
+		// Admitting readers whenever no writer holds the lock would leave the
+		// exclusive task waiting for a gap that a busy run never has.
+		const order: string[] = [];
+		const slow = (key: string, concurrency: Task<unknown>['concurrency']) =>
+			task(key, concurrency, async () => {
+				await new Promise((r) => setTimeout(r, 5));
+				order.push(key);
+				return null;
+			});
+
+		const tasks = [
+			slow('p1', 'parallel'),
+			slow('p2', 'parallel'),
+			slow('x', 'exclusive'),
+			...Array.from({ length: 20 }, (_, i) => slow(`later${i}`, 'parallel'))
+		];
+
+		await settle(tasks);
+
+		// Queued before the twenty that came after it, not behind them.
+		expect(order.indexOf('x')).toBeLessThan(order.indexOf('later0'));
+	});
+
 	it('times out a hanging task as failed rather than hanging the run', async () => {
 		const seen = await settle([
 			task('hang', 'parallel', () => new Promise(() => {}), 20),

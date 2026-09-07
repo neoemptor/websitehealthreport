@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { gradeOf, letterFor, GRADE_LEGEND } from './grade';
 import type { DomainResult, AnalyzerResult } from '$lib/shared/types';
 
+const pass = (p: number) => ({
+	scores: { performance: p, accessibility: 95, bestPractices: 95, seo: 95 },
+	metrics: { lcpMs: 1000, cls: 0.01, tbtMs: 50 }
+});
 const lh = (p: number): AnalyzerResult => ({
 	status: 'ok',
-	data: {
-		scores: { performance: p, accessibility: 95, bestPractices: 95, seo: 95 },
-		metrics: { lcpMs: 1000, cls: 0.01, tbtMs: 50 }
-	}
+	data: { mobile: pass(p), desktop: pass(p) }
 });
 const kw = (unused: number): AnalyzerResult => ({
 	status: 'ok',

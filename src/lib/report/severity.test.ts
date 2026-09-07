@@ -1,17 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import { severityOf } from './severity';
 
-const lh = (scores: number[], metrics = { lcpMs: 1000, cls: 0.01, tbtMs: 50 }) => ({
+const pass = (scores: number[], metrics = { lcpMs: 1000, cls: 0.01, tbtMs: 50 }) => ({
+	scores: {
+		performance: scores[0],
+		accessibility: scores[1],
+		bestPractices: scores[2],
+		seo: scores[3]
+	},
+	metrics
+});
+
+// A run reports both form factors; most cases only care that they agree.
+const lh = (
+	scores: number[],
+	metrics = { lcpMs: 1000, cls: 0.01, tbtMs: 50 },
+	desktop = pass(scores, metrics)
+) => ({
 	status: 'ok' as const,
-	data: {
-		scores: {
-			performance: scores[0],
-			accessibility: scores[1],
-			bestPractices: scores[2],
-			seo: scores[3]
-		},
-		metrics
-	}
+	data: { mobile: pass(scores, metrics), desktop }
 });
 
 describe('severityOf — states', () => {
@@ -64,8 +71,24 @@ describe('severityOf — lighthouse', () => {
 			'lighthouse',
 			lh([62, 88, 74, 91], { lcpMs: 4120, cls: 0.03, tbtMs: 610 })
 		);
-		expect(s.finding).toMatch(/^Performance scores 62 of 100/);
+		expect(s.finding).toMatch(/^On a phone, performance scores 62 of 100/);
 		expect(s.finding).toMatch(/4\.1s to appear/);
+	});
+
+	it('leads with the worse form factor and still reports the other', () => {
+		const s = severityOf(
+			'lighthouse',
+			lh([88, 95, 95, 95], { lcpMs: 1000, cls: 0.01, tbtMs: 50 }, pass([41, 95, 95, 95]))
+		);
+		expect(s).toMatchObject({ word: 'Poor', tone: 'fail' });
+		expect(s.finding).toMatch(/^On a desktop, performance scores 41 of 100/);
+		expect(s.finding).toMatch(/On a phone it scores 88\./);
+	});
+
+	it('needs both form factors before it reads the data as lighthouse', () => {
+		expect(
+			severityOf('lighthouse', { status: 'ok', data: { mobile: pass([95, 95, 95, 95]) } })
+		).toMatchObject({ word: 'Measured' });
 	});
 
 	it('falls back to Measured when the data is not lighthouse-shaped', () => {

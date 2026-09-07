@@ -7,6 +7,7 @@ import { oldSeoAnalyzer } from './analyzers/oldseo';
 import { waybackAnalyzer } from './analyzers/wayback';
 import { securityAnalyzer } from './analyzers/security';
 import { aeoAnalyzer } from './analyzers/aeo';
+import { createGeoAnalyzer } from './analyzers/geo';
 import { seoQuakeAnalyzer } from './analyzers/seoquake';
 import { contentAnalyzer } from './analyzers/content';
 import { createTrafficEstimatedAnalyzer } from './analyzers/traffic-estimated';
@@ -74,6 +75,11 @@ export function buildHandlers(deps: HandlerDeps) {
 		waybackAnalyzer,
 		securityAnalyzer,
 		aeoAnalyzer,
+		createGeoAnalyzer({
+			runClaude: deps.discovery?.runClaude ?? runClaude,
+			findClaude: deps.discovery?.findClaude ?? findClaude,
+			cwd: deps.userDataDir
+		}),
 		seoQuakeAnalyzer,
 		contentAnalyzer,
 		createTrafficEstimatedAnalyzer(deps.credentials),

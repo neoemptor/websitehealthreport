@@ -259,6 +259,43 @@ describe('discovery handlers', () => {
 		});
 		expect(await handlers.discoveryPreflight()).toEqual({ available: true, version: '2.1.237' });
 	});
+
+	it('runs the GEO analyzer on the same Claude seams as discovery', async () => {
+		const prompts: string[] = [];
+		const handlers = buildHandlers({
+			...base(),
+			discovery: {
+				findClaude: async () => ({ available: true, version: '2.1.0' }),
+				runClaude: async (opts) => {
+					prompts.push(opts.prompt);
+					return {
+						pages: ['https://example.com/'],
+						factors: [
+							'direct-answers',
+							'citations',
+							'statistics',
+							'quotations',
+							'clarity',
+							'entity',
+							'structure'
+						].map((id) => ({ id, rating: 'good', evidence: `Seen for ${id}.` })),
+						fixes: []
+					};
+				}
+			}
+		});
+
+		const run = await handlers.startRun({
+			client: 'example.com',
+			competitors: [],
+			enabledAnalyzers: ['geo']
+		});
+		await handlers.settled(run.id);
+
+		const stored = await handlers.loadRun(run.id);
+		expect(prompts[0]).toContain('Site to audit: https://example.com/');
+		expect(stored.domains[0].analyzers.geo).toMatchObject({ status: 'ok' });
+	});
 });
 
 describe('credential handlers', () => {

@@ -1,5 +1,6 @@
 import type { AnalyzerId, AnalyzerResult } from '$lib/shared/types';
 import type { OldSeoData, OldSeoCheck } from '$lib/shared/oldseo';
+import { FACTORS, RATINGS, type Rating } from '$lib/shared/geo';
 
 type WaybackData = {
 	firstSeen: string | null;
@@ -50,23 +51,14 @@ type AeoData = {
 	jsDependencyRatio: number;
 };
 
-type GeoRating = 'good' | 'needs-work' | 'poor';
+type GeoRating = Rating;
 type GeoFactor = { id: string; rating: GeoRating; evidence: string };
 type GeoData = { pages: string[]; factors: GeoFactor[]; fixes: string[] };
 
-// The order and questions must match electron/analyzers/geo/prompt.ts; the
-// renderer cannot import from electron, so they are restated here.
-const GEO_QUESTIONS: Record<string, string> = {
-	'direct-answers':
-		"Does a page answer a customer's likely question outright, early, in plain terms?",
-	citations: 'Does the content name and link the sources behind its claims?',
-	statistics: 'Are there hard figures — prices, timings, measurements, counts, dates?',
-	quotations: 'Are there attributed quotes from named people (owner, customers, experts)?',
-	clarity: 'Is the writing plain, specific and free of filler and jargon?',
-	entity: 'Is it unambiguous who the business is, where it operates and what it does?',
-	structure: 'Are headings question-shaped and sections short enough to lift out whole?'
-};
-const GEO_RATINGS: GeoRating[] = ['good', 'needs-work', 'poor'];
+const GEO_QUESTIONS: Record<string, string> = Object.fromEntries(
+	FACTORS.map((f) => [f.id, f.question])
+);
+const GEO_RATINGS: readonly GeoRating[] = RATINGS;
 
 /** "1 day" / "2 days" — never a bare count in front of a noun. */
 function plural(n: number, noun: string): string {

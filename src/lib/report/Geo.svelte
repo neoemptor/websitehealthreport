@@ -1,23 +1,16 @@
 <script lang="ts">
-	type Rating = 'good' | 'needs-work' | 'poor';
+	import { FACTORS, type Rating } from '$lib/shared/geo';
+
 	export let data: {
 		pages: string[];
 		factors: Array<{ id: string; rating: Rating; evidence: string }>;
 		fixes: string[];
 	};
 
-	// Same questions as electron/analyzers/geo/prompt.ts; the renderer cannot
-	// import from electron. Unknown ids fall back to the id itself.
-	const QUESTIONS: Record<string, string> = {
-		'direct-answers':
-			"Does a page answer a customer's likely question outright, early, in plain terms?",
-		citations: 'Does the content name and link the sources behind its claims?',
-		statistics: 'Are there hard figures — prices, timings, measurements, counts, dates?',
-		quotations: 'Are there attributed quotes from named people (owner, customers, experts)?',
-		clarity: 'Is the writing plain, specific and free of filler and jargon?',
-		entity: 'Is it unambiguous who the business is, where it operates and what it does?',
-		structure: 'Are headings question-shaped and sections short enough to lift out whole?'
-	};
+	// Unknown ids fall back to the id itself.
+	const QUESTIONS: Record<string, string> = Object.fromEntries(
+		FACTORS.map((f) => [f.id, f.question])
+	);
 
 	// Words, not colours: this is read on paper. The band word carries the
 	// state; the class only reinforces it on screen.

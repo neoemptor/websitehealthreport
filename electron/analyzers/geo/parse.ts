@@ -1,6 +1,6 @@
-import { FACTOR_IDS, RATINGS, type FactorId } from './prompt';
+import { FACTOR_IDS, RATINGS, type FactorId, type Rating } from '../../../src/lib/shared/geo';
 
-export type Rating = (typeof RATINGS)[number];
+export type { Rating };
 export type GeoFactor = { id: FactorId; rating: Rating; evidence: string };
 export type GeoData = { pages: string[]; factors: GeoFactor[]; fixes: string[] };
 

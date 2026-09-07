@@ -50,6 +50,24 @@ type AeoData = {
 	jsDependencyRatio: number;
 };
 
+type GeoRating = 'good' | 'needs-work' | 'poor';
+type GeoFactor = { id: string; rating: GeoRating; evidence: string };
+type GeoData = { pages: string[]; factors: GeoFactor[]; fixes: string[] };
+
+// The order and questions must match electron/analyzers/geo/prompt.ts; the
+// renderer cannot import from electron, so they are restated here.
+const GEO_QUESTIONS: Record<string, string> = {
+	'direct-answers':
+		"Does a page answer a customer's likely question outright, early, in plain terms?",
+	citations: 'Does the content name and link the sources behind its claims?',
+	statistics: 'Are there hard figures — prices, timings, measurements, counts, dates?',
+	quotations: 'Are there attributed quotes from named people (owner, customers, experts)?',
+	clarity: 'Is the writing plain, specific and free of filler and jargon?',
+	entity: 'Is it unambiguous who the business is, where it operates and what it does?',
+	structure: 'Are headings question-shaped and sections short enough to lift out whole?'
+};
+const GEO_RATINGS: GeoRating[] = ['good', 'needs-work', 'poor'];
+
 /** "1 day" / "2 days" — never a bare count in front of a noun. */
 function plural(n: number, noun: string): string {
 	return `${n} ${noun}${n === 1 ? '' : 's'}`;
@@ -500,6 +518,56 @@ function aeoSeverity(d: AeoData): Severity {
 	return { word: 'Good', tone: 'ok', finding };
 }
 
+function isGeo(d: unknown): d is GeoData {
+	const g = d as GeoData | null;
+	return (
+		!!g &&
+		Array.isArray(g.pages) &&
+		Array.isArray(g.factors) &&
+		g.factors.length === 7 &&
+		g.factors.every(
+			(f) =>
+				typeof f?.id === 'string' &&
+				f.id in GEO_QUESTIONS &&
+				GEO_RATINGS.includes(f.rating) &&
+				typeof f.evidence === 'string'
+		)
+	);
+}
+
+const GEO_WORD: Record<GeoRating, string> = {
+	good: 'good',
+	'needs-work': 'needs work',
+	poor: 'poor'
+};
+
+/** The verdict is the worst factor, as for every other check; the finding names it. */
+function geoSeverity(d: GeoData): Severity {
+	const good = d.factors.filter((f) => f.rating === 'good').length;
+	const worst =
+		d.factors.find((f) => f.rating === 'poor') ??
+		d.factors.find((f) => f.rating === 'needs-work') ??
+		null;
+
+	if (!worst) {
+		return {
+			word: 'Good',
+			tone: 'ok',
+			finding: `All seven GEO factors are good; ${d.factors[0].evidence}`
+		};
+	}
+
+	const question = GEO_QUESTIONS[worst.id];
+	const lowered = question.charAt(0).toLowerCase() + question.slice(1);
+	return {
+		word: worst.rating === 'poor' ? 'Poor' : 'Needs work',
+		tone: worst.rating === 'poor' ? 'fail' : 'warn',
+		finding: `${good} of 7 factors good; ${lowered} is ${GEO_WORD[worst.rating]} — ${
+			worst.evidence
+		}`
+	};
+}
+
 function isSeoQuake(d: unknown): d is SeoQuakeData {
 	const s = d as SeoQuakeData | null;
 	return (
@@ -829,6 +897,7 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 	if (id === 'wayback' && isWayback(result.data)) return waybackSeverity(result.data);
 	if (id === 'security' && isSecurity(result.data)) return securitySeverity(result.data);
 	if (id === 'aeo' && isAeo(result.data)) return aeoSeverity(result.data);
+	if (id === 'geo' && isGeo(result.data)) return geoSeverity(result.data);
 	if (id === 'seoquake' && isSeoQuake(result.data)) return seoQuakeSeverity(result.data);
 	if (id === 'content' && isContent(result.data)) return contentSeverity(result.data);
 	if (id === 'traffic-estimated' && isTrafficEstimated(result.data))

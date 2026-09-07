@@ -926,3 +926,53 @@ describe('severityOf — traffic-owned', () => {
 		});
 	});
 });
+
+describe('severityOf — geo', () => {
+	const IDS = [
+		'direct-answers',
+		'citations',
+		'statistics',
+		'quotations',
+		'clarity',
+		'entity',
+		'structure'
+	] as const;
+	const geo = (ratings: Partial<Record<(typeof IDS)[number], 'good' | 'needs-work' | 'poor'>>) => ({
+		status: 'ok' as const,
+		data: {
+			pages: ['https://example.com/'],
+			factors: IDS.map((id) => ({
+				id,
+				rating: ratings[id] ?? 'good',
+				evidence: `Evidence about ${id}.`
+			})),
+			fixes: []
+		}
+	});
+
+	it('is Poor when any factor is poor, and names it with its evidence', () => {
+		const s = severityOf('geo', geo({ statistics: 'poor', citations: 'needs-work' }));
+		expect(s).toMatchObject({ word: 'Poor', tone: 'fail' });
+		expect(s.finding).toBe(
+			'5 of 7 factors good; are there hard figures — prices, timings, measurements, counts, dates? is poor — Evidence about statistics.'
+		);
+	});
+
+	it('is Needs work when the worst factor needs work', () => {
+		const s = severityOf('geo', geo({ entity: 'needs-work' }));
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toMatch(/^6 of 7 factors good; .* is needs work — Evidence about entity\.$/);
+	});
+
+	it('is Good when every factor is good', () => {
+		const s = severityOf('geo', geo({}));
+		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
+		expect(s.finding).toBe('All seven GEO factors are good; Evidence about direct-answers.');
+	});
+
+	it('falls back to Measured when the data is not geo-shaped', () => {
+		expect(severityOf('geo', { status: 'ok', data: { factors: [] } })).toMatchObject({
+			word: 'Measured'
+		});
+	});
+});

@@ -9,6 +9,7 @@
 	import Wayback from '$lib/report/Wayback.svelte';
 	import Security from '$lib/report/Security.svelte';
 	import Aeo from '$lib/report/Aeo.svelte';
+	import Geo from '$lib/report/Geo.svelte';
 	import SeoQuake from '$lib/report/SeoQuake.svelte';
 	import Content from '$lib/report/Content.svelte';
 	import TrafficOwned from '$lib/report/TrafficOwned.svelte';
@@ -33,6 +34,7 @@
 		wayback: Wayback,
 		security: Security,
 		aeo: Aeo,
+		geo: Geo,
 		seoquake: SeoQuake,
 		content: Content,
 		'traffic-owned': TrafficOwned,

@@ -46,6 +46,11 @@
 			note: 'Can AI crawlers read the site without JavaScript'
 		},
 		{
+			id: 'geo',
+			label: 'GEO (AI citations)',
+			note: 'Would AI answer engines cite this site; needs Claude Code'
+		},
+		{
 			id: 'seoquake',
 			label: 'SEO Quake',
 			note: 'Semrush rank, backlinks and linking domains from the browser extension'

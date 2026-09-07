@@ -38,8 +38,11 @@ export function parseGeoResponse(input: unknown, domain: string): GeoData {
 	}
 
 	const host = new URL(domain).hostname.toLowerCase().replace(/^www\./, '');
+	// A string with whitespace in it is an annotation like "https://.../ (home)",
+	// not a URL Claude fetched — new URL() would silently percent-encode the
+	// space and let it through, so reject it before the onSite check.
 	const pages = (r.pages as unknown[]).filter(
-		(p): p is string => typeof p === 'string' && onSite(p, host)
+		(p): p is string => typeof p === 'string' && !/\s/.test(p) && onSite(p, host)
 	);
 	if (pages.length === 0) throw new Error('Claude rated the site but listed no page on it.');
 

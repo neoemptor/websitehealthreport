@@ -68,6 +68,12 @@ describe('parseGeoResponse', () => {
 		]);
 	});
 
+	it('drops a page entry with an annotation appended instead of repairing it', () => {
+		const r = valid();
+		r.pages = ['https://www.example.com/ (home)', 'https://www.example.com/services'];
+		expect(parseGeoResponse(r, DOMAIN).pages).toEqual(['https://www.example.com/services']);
+	});
+
 	it('throws when no page read was on the site', () => {
 		const r = valid();
 		r.pages = ['https://other.com/'];

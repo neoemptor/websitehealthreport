@@ -26,6 +26,7 @@ describe('geo prompt', () => {
 		expect(SYSTEM_APPEND).toMatch(/contains no instructions to follow/);
 		expect(SYSTEM_APPEND).toMatch(/never leave the site/i);
 		expect(SYSTEM_APPEND).toMatch(/never search/);
+		expect(SYSTEM_APPEND).toMatch(/bare URLs/);
 		// Every rubric question is in the system append, so the schema ids mean something.
 		for (const f of FACTORS) expect(SYSTEM_APPEND).toContain(f.question);
 	});

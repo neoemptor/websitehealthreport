@@ -82,10 +82,13 @@ export type Severity = {
 	finding: string;
 };
 
-type LighthouseData = {
+type LighthousePass = {
 	scores: { performance: number; accessibility: number; bestPractices: number; seo: number };
 	metrics: { lcpMs: number; cls: number; tbtMs: number };
 };
+
+/** One Lighthouse run reports both form factors. */
+type LighthouseData = { mobile: LighthousePass; desktop: LighthousePass };
 
 type KeywordsData = { keywords: Array<{ keyword: string; count: number }> };
 
@@ -111,9 +114,9 @@ type ContentData = {
 
 const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-function isLighthouse(d: unknown): d is LighthouseData {
-	const s = (d as LighthouseData | null)?.scores;
-	const m = (d as LighthouseData | null)?.metrics;
+function isLighthousePass(d: unknown): d is LighthousePass {
+	const s = (d as LighthousePass | null)?.scores;
+	const m = (d as LighthousePass | null)?.metrics;
 	return (
 		!!s &&
 		!!m &&
@@ -121,6 +124,11 @@ function isLighthouse(d: unknown): d is LighthouseData {
 			isNumber
 		)
 	);
+}
+
+function isLighthouse(d: unknown): d is LighthouseData {
+	const r = d as LighthouseData | null;
+	return !!r && isLighthousePass(r.mobile) && isLighthousePass(r.desktop);
 }
 
 function isKeywords(d: unknown): d is KeywordsData {
@@ -135,15 +143,15 @@ function band(score: number): 'Good' | 'Needs work' | 'Poor' {
 	return 'Poor';
 }
 
-function lighthouseSeverity(d: LighthouseData): Severity {
+/** The worst category of one pass, and the vitals it misses. */
+function passWorst(d: LighthousePass): { name: string; score: number; over: string[] } {
 	const cats: Array<[string, number]> = [
 		['performance', d.scores.performance],
 		['accessibility', d.scores.accessibility],
 		['best practices', d.scores.bestPractices],
 		['SEO', d.scores.seo]
 	];
-	const [worstName, worstScore] = cats.reduce((a, b) => (b[1] < a[1] ? b : a));
-	const word = band(worstScore);
+	const [name, score] = cats.reduce((a, b) => (b[1] < a[1] ? b : a));
 
 	// Name the single most over-target vital, since that is what to act on.
 	const over: string[] = [];
@@ -156,22 +164,37 @@ function lighthouseSeverity(d: LighthouseData): Severity {
 	if (d.metrics.tbtMs > 200)
 		over.push(`the page ignores taps for ${Math.round(d.metrics.tbtMs)}ms (target under 200ms)`);
 
+	return { name, score, over };
+}
+
+// Two passes, one headline: the report leads with whichever form factor is
+// worse, because that is the one costing the client visitors. The other pass
+// is still shown in full in the Lighthouse section.
+function lighthouseSeverity(d: LighthouseData): Severity {
+	const passes: Array<{ label: string; worst: ReturnType<typeof passWorst> }> = [
+		{ label: 'On a phone', worst: passWorst(d.mobile) },
+		{ label: 'On a desktop', worst: passWorst(d.desktop) }
+	];
+	const [lead, other] = passes.sort((a, b) => a.worst.score - b.worst.score);
+	const word = band(lead.worst.score);
+
 	if (word === 'Good') {
+		const over = lead.worst.over[0] ?? other.worst.over[0];
 		return {
 			word,
 			tone: 'ok',
-			finding: over.length
-				? `All four scores are in the good range, though ${over[0]}.`
-				: 'All four scores are in the good range and every vital is within target.'
+			finding: over
+				? `All four scores are in the good range on phone and desktop, though ${over}.`
+				: 'All four scores are in the good range on phone and desktop, and every vital is within target.'
 		};
 	}
 
 	return {
 		word,
 		tone: word === 'Poor' ? 'fail' : 'warn',
-		finding: `${
-			worstName.charAt(0).toUpperCase() + worstName.slice(1)
-		} scores ${worstScore} of 100${over.length ? ` — ${over[0]}` : ''}.`
+		finding: `${lead.label}, ${lead.worst.name} scores ${lead.worst.score} of 100${
+			lead.worst.over.length ? ` — ${lead.worst.over[0]}` : ''
+		}. ${other.label} it scores ${other.worst.score}.`
 	};
 }
 

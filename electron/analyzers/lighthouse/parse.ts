@@ -3,6 +3,9 @@ export type LighthouseData = {
 	metrics: { lcpMs: number; cls: number; tbtMs: number };
 };
 
+/** One run reports both form factors: a phone and a desktop score differ. */
+export type LighthouseResult = { mobile: LighthouseData; desktop: LighthouseData };
+
 type Lhr = {
 	categories?: Record<string, { score?: number | null }>;
 	audits?: Record<string, { numericValue?: number }>;

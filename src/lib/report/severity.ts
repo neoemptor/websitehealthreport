@@ -212,6 +212,36 @@ function lighthouseSeverity(d: LighthouseData): Severity {
 	};
 }
 
+/**
+ * A run saved before the mobile/desktop split holds one unlabelled pass.
+ * Banded the same way, and the finding says so, because the reader cannot
+ * otherwise tell which device it describes.
+ */
+function legacyLighthouseSeverity(d: LighthousePass): Severity {
+	const { name, score, over } = passWorst(d);
+	const word = band(score);
+	const note = ' Single pass from an older run; re-run for phone and desktop.';
+
+	if (word === 'Good') {
+		return {
+			word,
+			tone: 'ok',
+			finding:
+				(over.length
+					? `All four scores are in the good range, though ${over[0]}.`
+					: 'All four scores are in the good range and every vital is within target.') + note
+		};
+	}
+
+	return {
+		word,
+		tone: word === 'Poor' ? 'fail' : 'warn',
+		finding: `${name.charAt(0).toUpperCase() + name.slice(1)} scores ${score} of 100${
+			over.length ? ` — ${over[0]}` : ''
+		}.${note}`
+	};
+}
+
 function keywordsSeverity(d: KeywordsData): Severity {
 	const total = d.keywords.length;
 	if (total === 0) {
@@ -887,6 +917,8 @@ export function severityOf(id: AnalyzerId, result: AnalyzerResult | undefined): 
 		};
 
 	if (id === 'lighthouse' && isLighthouse(result.data)) return lighthouseSeverity(result.data);
+	if (id === 'lighthouse' && isLighthousePass(result.data))
+		return legacyLighthouseSeverity(result.data);
 	if (id === 'keywords' && isKeywords(result.data)) return keywordsSeverity(result.data);
 	if (id === 'oldseo' && isOldSeo(result.data)) return oldSeoSeverity(result.data);
 	if (id === 'wayback' && isWayback(result.data)) return waybackSeverity(result.data);

@@ -4,7 +4,8 @@
 		metrics: { lcpMs: number; cls: number; tbtMs: number };
 	};
 
-	export let data: { mobile: Pass; desktop: Pass };
+	// A run saved before the mobile/desktop split is a bare Pass.
+	export let data: { mobile: Pass; desktop: Pass } | Pass;
 
 	// Google's own banding. Stated as words as well as numbers, because a client
 	// reading "62" has no idea whether that is good, and because the report is
@@ -69,13 +70,18 @@
 	}
 
 	// Mobile first, because that is how most visitors arrive and it is usually
-	// the worse of the two. A run stored before the desktop pass existed, or a
-	// malformed result, simply drops the section rather than throwing.
+	// the worse of the two. A run stored before the desktop pass existed holds
+	// one unlabelled pass and gets one section that says so; a malformed
+	// result simply drops the section rather than throwing.
+	$: split = data as { mobile?: Pass; desktop?: Pass } | null;
+	$: legacy = data as Pass | null;
 	$: sections = (
-		[
-			{ heading: 'On a phone', pass: data?.mobile },
-			{ heading: 'On a desktop', pass: data?.desktop }
-		] as const
+		split?.mobile || split?.desktop
+			? [
+					{ heading: 'On a phone', pass: split?.mobile },
+					{ heading: 'On a desktop', pass: split?.desktop }
+			  ]
+			: [{ heading: 'Older run, single pass', pass: legacy }]
 	)
 		.filter((s) => !!s.pass?.scores && !!s.pass?.metrics)
 		.map((s) => ({

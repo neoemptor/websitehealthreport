@@ -100,6 +100,22 @@ describe('severityOf — lighthouse', () => {
 		).toMatchObject({ word: 'Measured' });
 	});
 
+	it('still bands a single-pass result stored by an older build', () => {
+		// Runs saved before the mobile/desktop split hold one unlabelled pass.
+		const legacy = {
+			status: 'ok' as const,
+			data: pass([62, 88, 74, 91], { lcpMs: 4120, cls: 0.03, tbtMs: 610 })
+		};
+		const s = severityOf('lighthouse', legacy);
+		expect(s).toMatchObject({ word: 'Needs work', tone: 'warn' });
+		expect(s.finding).toMatch(/^Performance scores 62 of 100 — the main content takes 4\.1s/);
+		expect(s.finding).toMatch(/older run/i);
+		expect(severityOf('lighthouse', { status: 'ok', data: pass([95, 95, 95, 95]) })).toMatchObject({
+			word: 'Good',
+			tone: 'ok'
+		});
+	});
+
 	it('falls back to Measured when the data is not lighthouse-shaped', () => {
 		expect(severityOf('lighthouse', { status: 'ok', data: { nope: true } })).toMatchObject({
 			word: 'Measured'

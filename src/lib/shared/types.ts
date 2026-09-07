@@ -6,6 +6,7 @@ export type AnalyzerId =
 	| 'wayback'
 	| 'security'
 	| 'aeo'
+	| 'geo'
 	| 'content'
 	| 'traffic-owned'
 	| 'traffic-estimated';

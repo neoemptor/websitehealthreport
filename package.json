@@ -1,6 +1,6 @@
 {
 	"name": "websitehealthreport",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"private": true,
 	"productName": "Website Health Report",
 	"description": "Website Health Report - retrieves Lighthouse and SEOQuake Information for customer and competitors and creates a PDF Report.",

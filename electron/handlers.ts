@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import type { AnalyzerId, Run } from '../src/lib/shared/types';
 import { normaliseDomain } from '../src/lib/shared/url';
 import { createRegistry } from './analyzers/registry';
@@ -68,6 +70,13 @@ export type StartRunInput = {
 };
 
 export function buildHandlers(deps: HandlerDeps) {
+	// userDataDir also holds runs/*.json and credentials.enc, and
+	// --allowedTools is an auto-approve allowlist, not a deny-list, so
+	// Claude Code's default read-only file tools could otherwise reach them.
+	// A dedicated, empty directory keeps nothing there for Claude to find.
+	const claudeCwd = path.join(deps.userDataDir, 'claude-cwd');
+	fs.mkdirSync(claudeCwd, { recursive: true });
+
 	const registry = createRegistry([
 		lighthouseAnalyzer,
 		keywordsAnalyzer,
@@ -78,7 +87,7 @@ export function buildHandlers(deps: HandlerDeps) {
 		createGeoAnalyzer({
 			runClaude: deps.discovery?.runClaude ?? runClaude,
 			findClaude: deps.discovery?.findClaude ?? findClaude,
-			cwd: deps.userDataDir
+			cwd: claudeCwd
 		}),
 		seoQuakeAnalyzer,
 		contentAnalyzer,
@@ -92,7 +101,7 @@ export function buildHandlers(deps: HandlerDeps) {
 	const discoveryDeps: CompetitorDeps = {
 		runClaude: deps.discovery?.runClaude ?? runClaude,
 		fetchHomepage: deps.discovery?.fetchHomepage ?? fetchHomepage,
-		cwd: deps.discovery?.cwd ?? deps.userDataDir,
+		cwd: deps.discovery?.cwd ?? claudeCwd,
 		timeoutMs: deps.discovery?.timeoutMs
 	};
 	const probeClaude = deps.discovery?.findClaude ?? findClaude;

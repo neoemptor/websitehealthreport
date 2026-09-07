@@ -543,8 +543,8 @@ function geoSeverity(d: GeoData): Severity {
 		null;
 
 	if (!worst) {
-		const directAnswers = d.factors.find((f) => f.id === 'direct-answers')?.evidence ??
-			d.factors[0].evidence;
+		const directAnswers =
+			d.factors.find((f) => f.id === 'direct-answers')?.evidence ?? d.factors[0].evidence;
 		return {
 			word: 'Good',
 			tone: 'ok',

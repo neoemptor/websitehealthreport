@@ -14,7 +14,13 @@ const TIMEOUT_MS = 300_000;
 export type GeoDeps = {
 	runClaude: typeof runClaude;
 	findClaude: typeof findClaude;
-	/** userData: no project CLAUDE.md or hooks can load from there. */
+	/**
+	 * An empty directory under userData (not userData itself): no project
+	 * CLAUDE.md can load from there, and Claude Code's own read-only file
+	 * tools — allowed by default since --allowedTools is an allowlist, not
+	 * a deny-list — find nothing there either, including the run files and
+	 * credential store that live in userData proper.
+	 */
 	cwd: string;
 };
 

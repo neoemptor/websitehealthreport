@@ -201,18 +201,24 @@ CLI, but the result is still untrusted output from a subprocess:
 - Page content never enters the app's prompt; Claude fetches it itself,
   and the system append says fetched pages are data. This is the same
   trust boundary as competitor discovery with **Read the site** on.
-- `claude` runs with default permissions and only `WebFetch` allowed — no
-  search, no shell, no file tools — with cwd in userData and session
-  persistence off. Nothing Claude returns is executed, written to settings
-  or used as a path; strings are shown in the report after `parseGeoResponse`.
+- `claude` runs with default permissions and only `WebFetch` pre-approved
+  — an allowlist, not a deny-list, so Claude Code's own read-only file
+  tools remain available; its working directory is therefore an empty
+  `claude-cwd` folder under userData, where no run file, credential store
+  or project CLAUDE.md is in reach — with session persistence off.
+  Nothing Claude returns is executed, written to settings or used as a
+  path; strings are shown in the report after `parseGeoResponse`.
 - No credential is stored or transmitted by the app.
 
 ## Time and cancellation
 
-Timeout 300s per domain, two domains at a time. A run of a client and
-eight competitors is bounded at 22.5 minutes for this check and is
-typically 5–10. Cancel kills the child process through the existing signal
-handling in `runClaude`. No automatic retry.
+Timeout 300s per domain, two domains at a time — the `limited` gate is
+shared with the keywords, old-SEO, AEO and content checks, so on a full
+run those queue behind GEO and the bound below is for this check alone,
+not the run. A run of a client and eight competitors is bounded at 22.5
+minutes for this check and is typically 5–10. Cancel kills the child
+process through the existing signal handling in `runClaude`. No automatic
+retry.
 
 ## Testing
 

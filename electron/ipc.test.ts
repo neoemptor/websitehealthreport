@@ -147,10 +147,14 @@ describe('discovery handlers', () => {
 	});
 
 	it('maps a good answer to ok', async () => {
+		const cwds: string[] = [];
 		const handlers = buildHandlers({
 			...base(),
 			discovery: {
-				runClaude: async () => ({ suggestions: [{ domain: 'a.com.au', name: 'A', reason: 'r' }] })
+				runClaude: async (opts) => {
+					cwds.push(opts.cwd);
+					return { suggestions: [{ domain: 'a.com.au', name: 'A', reason: 'r' }] };
+				}
 			}
 		});
 		const result = await handlers.suggestCompetitors(input);
@@ -158,6 +162,7 @@ describe('discovery handlers', () => {
 			status: 'ok',
 			suggestions: [{ domain: 'a.com.au', name: 'A', reason: 'r' }]
 		});
+		expect(cwds[0]).toBe(path.join(dir, 'claude-cwd'));
 	});
 
 	it('maps unavailable, failed and empty client without throwing', async () => {
@@ -262,12 +267,14 @@ describe('discovery handlers', () => {
 
 	it('runs the GEO analyzer on the same Claude seams as discovery', async () => {
 		const prompts: string[] = [];
+		const cwds: string[] = [];
 		const handlers = buildHandlers({
 			...base(),
 			discovery: {
 				findClaude: async () => ({ available: true, version: '2.1.0' }),
 				runClaude: async (opts) => {
 					prompts.push(opts.prompt);
+					cwds.push(opts.cwd);
 					return {
 						pages: ['https://example.com/'],
 						factors: [
@@ -298,6 +305,10 @@ describe('discovery handlers', () => {
 		expect(
 			(stored.domains[0].analyzers.geo as { data: { factors: unknown[] } }).data.factors
 		).toHaveLength(7);
+
+		const claudeCwd = path.join(dir, 'claude-cwd');
+		expect(cwds[0]).toBe(claudeCwd);
+		expect((await fs.stat(claudeCwd)).isDirectory()).toBe(true);
 	});
 });
 

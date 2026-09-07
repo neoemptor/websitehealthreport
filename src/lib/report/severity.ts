@@ -523,7 +523,8 @@ function isGeo(d: unknown): d is GeoData {
 				f.id in GEO_QUESTIONS &&
 				GEO_RATINGS.includes(f.rating) &&
 				typeof f.evidence === 'string'
-		)
+		) &&
+		new Set(g.factors.map((f) => f.id)).size === 7
 	);
 }
 
@@ -542,10 +543,12 @@ function geoSeverity(d: GeoData): Severity {
 		null;
 
 	if (!worst) {
+		const directAnswers = d.factors.find((f) => f.id === 'direct-answers')?.evidence ??
+			d.factors[0].evidence;
 		return {
 			word: 'Good',
 			tone: 'ok',
-			finding: `All seven GEO factors are good; ${d.factors[0].evidence}`
+			finding: `All seven GEO factors are good; ${directAnswers}`
 		};
 	}
 

@@ -28,7 +28,7 @@ describe('parseGeoResponse', () => {
 	it('throws when a factor is missing', () => {
 		const r = valid();
 		r.factors = r.factors.filter((f) => f.id !== 'clarity');
-		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/rated 6 of the seven GEO factors/);
+		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/rated 6 of the 7 GEO factors/);
 	});
 
 	it('throws when a factor is repeated', () => {
@@ -78,6 +78,12 @@ describe('parseGeoResponse', () => {
 		const r = valid();
 		r.pages = ['https://other.com/'];
 		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/no page/i);
+	});
+
+	it('caps pages at six after filtering, even if the schema is not trusted', () => {
+		const r = valid();
+		r.pages = Array.from({ length: 8 }, (_, i) => `https://www.example.com/page-${i}`);
+		expect(parseGeoResponse(r, DOMAIN).pages).toHaveLength(6);
 	});
 
 	it('trims, caps and truncates evidence and fixes', () => {

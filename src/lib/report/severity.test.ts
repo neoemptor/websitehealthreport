@@ -975,4 +975,18 @@ describe('severityOf — geo', () => {
 			word: 'Measured'
 		});
 	});
+
+	it('falls back to Measured when seven factors carry a duplicated id', () => {
+		const data = geo({});
+		data.data.factors[6] = { ...data.data.factors[6], id: data.data.factors[0].id };
+		expect(severityOf('geo', data)).toMatchObject({ word: 'Measured' });
+	});
+
+	it('quotes the direct-answers evidence for the all-good finding however the factors are ordered', () => {
+		const data = geo({});
+		data.data.factors = [...data.data.factors].reverse();
+		const s = severityOf('geo', data);
+		expect(s).toMatchObject({ word: 'Good', tone: 'ok' });
+		expect(s.finding).toBe('All seven GEO factors are good; Evidence about direct-answers.');
+	});
 });

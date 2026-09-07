@@ -7,6 +7,10 @@ import {
 import { SYSTEM_APPEND, SCHEMA, buildPrompt } from './prompt';
 import { parseGeoResponse, type GeoData } from './parse';
 
+// Browsing up to six pages and rating them is typically 60-150s; the cap
+// leaves room for a slow site.
+const TIMEOUT_MS = 300_000;
+
 export type GeoDeps = {
 	runClaude: typeof runClaude;
 	findClaude: typeof findClaude;
@@ -30,9 +34,7 @@ export function createGeoAnalyzer(deps: GeoDeps): Analyzer<Record<string, never>
 		// Two Claude processes at a time: each browses several pages, and a
 		// batch of nine domains would otherwise open nine at once.
 		concurrency: 'limited',
-		// Browsing up to six pages and rating them is typically 60–150s; the
-		// cap leaves room for a slow site.
-		timeoutMs: 300_000,
+		timeoutMs: TIMEOUT_MS,
 		defaultSettings: {},
 
 		async preflight() {
@@ -51,7 +53,7 @@ export function createGeoAnalyzer(deps: GeoDeps): Analyzer<Record<string, never>
 					schema: SCHEMA,
 					allowedTools: ['WebFetch'],
 					signal,
-					timeoutMs: 300_000,
+					timeoutMs: TIMEOUT_MS,
 					cwd: deps.cwd
 				});
 			} catch (error) {

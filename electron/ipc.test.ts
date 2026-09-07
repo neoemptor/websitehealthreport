@@ -295,6 +295,9 @@ describe('discovery handlers', () => {
 		const stored = await handlers.loadRun(run.id);
 		expect(prompts[0]).toContain('Site to audit: https://example.com/');
 		expect(stored.domains[0].analyzers.geo).toMatchObject({ status: 'ok' });
+		expect(
+			(stored.domains[0].analyzers.geo as { data: { factors: unknown[] } }).data.factors
+		).toHaveLength(7);
 	});
 });
 

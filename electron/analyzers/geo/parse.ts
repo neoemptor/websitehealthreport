@@ -6,6 +6,7 @@ export type GeoData = { pages: string[]; factors: GeoFactor[]; fixes: string[] }
 
 const TEXT_CAP = 300;
 const MAX_FIXES = 3;
+const MAX_PAGES = 6;
 
 const isFactorId = (v: unknown): v is FactorId =>
 	typeof v === 'string' && (FACTOR_IDS as readonly string[]).includes(v);
@@ -41,9 +42,11 @@ export function parseGeoResponse(input: unknown, domain: string): GeoData {
 	// A string with whitespace in it is an annotation like "https://.../ (home)",
 	// not a URL Claude fetched — new URL() would silently percent-encode the
 	// space and let it through, so reject it before the onSite check.
-	const pages = (r.pages as unknown[]).filter(
-		(p): p is string => typeof p === 'string' && !/\s/.test(p) && onSite(p, host)
-	);
+	// The schema caps this at 6, but the schema is not trusted either — the
+	// cap is re-applied here on the filtered list.
+	const pages = (r.pages as unknown[])
+		.filter((p): p is string => typeof p === 'string' && !/\s/.test(p) && onSite(p, host))
+		.slice(0, MAX_PAGES);
 	if (pages.length === 0) throw new Error('Claude rated the site but listed no page on it.');
 
 	const byId = new Map<FactorId, GeoFactor>();
@@ -57,7 +60,7 @@ export function parseGeoResponse(input: unknown, domain: string): GeoData {
 		byId.set(f.id, { id: f.id, rating: f.rating, evidence: clip(f.evidence) });
 	}
 	if (byId.size !== FACTOR_IDS.length) {
-		throw new Error(`Claude rated ${byId.size} of the seven GEO factors.`);
+		throw new Error(`Claude rated ${byId.size} of the ${FACTOR_IDS.length} GEO factors.`);
 	}
 
 	const fixes = (Array.isArray(r.fixes) ? r.fixes : [])

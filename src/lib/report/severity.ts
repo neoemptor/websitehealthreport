@@ -194,7 +194,11 @@ function lighthouseSeverity(d: LighthouseData): Severity {
 		tone: word === 'Poor' ? 'fail' : 'warn',
 		finding: `${lead.label}, ${lead.worst.name} scores ${lead.worst.score} of 100${
 			lead.worst.over.length ? ` — ${lead.worst.over[0]}` : ''
-		}. ${other.label} it scores ${other.worst.score}.`
+		}. ${other.label}, ${
+			// "it" would read as the category just named, which is only what the
+			// other pass's worst is when the two happen to agree.
+			other.worst.name === lead.worst.name ? 'it ' : `${other.worst.name} `
+		}scores ${other.worst.score}.`
 	};
 }
 

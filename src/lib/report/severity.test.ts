@@ -82,7 +82,16 @@ describe('severityOf — lighthouse', () => {
 		);
 		expect(s).toMatchObject({ word: 'Poor', tone: 'fail' });
 		expect(s.finding).toMatch(/^On a desktop, performance scores 41 of 100/);
-		expect(s.finding).toMatch(/On a phone it scores 88\./);
+		expect(s.finding).toMatch(/On a phone, it scores 88\./);
+	});
+
+	it('names the other pass worst category when it is a different one', () => {
+		// "it scores 74" would read as performance, which is not what 74 is.
+		const s = severityOf(
+			'lighthouse',
+			lh([41, 88, 74, 91], { lcpMs: 4120, cls: 0.03, tbtMs: 610 }, pass([88, 88, 74, 91]))
+		);
+		expect(s.finding).toMatch(/On a desktop, best practices scores 74\./);
 	});
 
 	it('needs both form factors before it reads the data as lighthouse', () => {

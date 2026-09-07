@@ -7,6 +7,32 @@ function nextTempId(): number {
 	return ++tempIdCounter;
 }
 
+const RENAME_ATTEMPTS = 10;
+const RENAME_BACKOFF_MS = 15;
+const TRANSIENT_RENAME = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/**
+ * Rename is atomic on every target platform, but on Windows a rename over a
+ * file that is momentarily held — by another rename replacing it, or by
+ * Defender scanning what was just written — is refused with EPERM instead
+ * of queued. Two saves of the same run landing together (a progress update
+ * and a completion) hit exactly that, deterministically on the GitHub
+ * Windows runner. The hold lasts milliseconds, so a short retry is the
+ * whole fix; Linux and macOS never take the retry path.
+ */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+	for (let attempt = 1; ; attempt++) {
+		try {
+			await fs.rename(from, to);
+			return;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code ?? '';
+			if (!TRANSIENT_RENAME.has(code) || attempt === RENAME_ATTEMPTS) throw error;
+			await new Promise((resolve) => setTimeout(resolve, RENAME_BACKOFF_MS * attempt));
+		}
+	}
+}
+
 export class RunStorage {
 	private readonly runsDir: string;
 
@@ -25,7 +51,13 @@ export class RunStorage {
 		const temp = `${target}.${process.pid}.${nextTempId()}.tmp`;
 
 		await fs.writeFile(temp, JSON.stringify(run, null, 2), 'utf-8');
-		await fs.rename(temp, target);
+		try {
+			await renameWithRetry(temp, target);
+		} catch (error) {
+			// The write is abandoned; do not leave its temp file beside the runs.
+			await fs.rm(temp, { force: true });
+			throw error;
+		}
 	}
 
 	async load(id: string): Promise<Run> {

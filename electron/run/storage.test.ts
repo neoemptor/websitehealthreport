@@ -1,9 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs/promises';
+
+// rename is spied so a test can make it fail the way Windows does under
+// contention; every other call goes straight through to the real module.
+vi.mock('fs/promises', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('fs/promises')>();
+	return { ...actual, rename: vi.fn(actual.rename) };
+});
 import * as os from 'os';
 import * as path from 'path';
 import { RunStorage } from './storage';
 import type { Run } from '../../src/lib/shared/types';
+
+const actualFs = await vi.importActual<typeof import('fs/promises')>('fs/promises');
 
 let dir: string;
 let storage: RunStorage;
@@ -24,6 +33,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	vi.mocked(fs.rename).mockReset();
+	vi.mocked(fs.rename).mockImplementation(actualFs.rename);
 	await fs.rm(dir, { recursive: true, force: true });
 });
 
@@ -77,6 +88,30 @@ describe('RunStorage', () => {
 		// Verify no temporary files are left behind
 		const entries = await fs.readdir(path.join(dir, 'runs'));
 		expect(entries).toEqual([`${run.id}.json`]);
+	});
+
+	it('retries a rename Windows refuses while the target is briefly held', async () => {
+		// On Windows a rename over a file another rename is replacing (or that
+		// Defender is scanning) fails with EPERM for a few milliseconds. Two
+		// refusals, then the real rename.
+		const eperm = () =>
+			Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+		vi.mocked(fs.rename).mockRejectedValueOnce(eperm()).mockRejectedValueOnce(eperm());
+
+		await storage.save(run);
+
+		expect(vi.mocked(fs.rename)).toHaveBeenCalledTimes(3);
+		expect((await storage.load(run.id)).id).toBe(run.id);
+		expect(await fs.readdir(path.join(dir, 'runs'))).toEqual([`${run.id}.json`]);
+	});
+
+	it('gives up on a rename that keeps failing and leaves no temp file behind', async () => {
+		const eperm = () =>
+			Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' });
+		vi.mocked(fs.rename).mockRejectedValue(eperm());
+
+		await expect(storage.save(run)).rejects.toThrow(/EPERM/);
+		expect(await fs.readdir(path.join(dir, 'runs'))).toEqual([]);
 	});
 
 	it('rewrites interrupted running runs as aborted', async () => {

@@ -35,7 +35,13 @@ describe('parseGeoResponse', () => {
 		const r = valid();
 		r.factors[0] = factor('citations');
 		r.factors[1] = factor('citations');
-		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/of the seven GEO factors/);
+		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/twice/);
+	});
+
+	it('rejects a repeated GEO factor outright', () => {
+		const r = valid();
+		r.factors.push(factor('citations', 'poor', 'Second opinion.'));
+		expect(() => parseGeoResponse(r, DOMAIN)).toThrow(/repeated|twice/i);
 	});
 
 	it('throws naming an unknown id or rating', () => {

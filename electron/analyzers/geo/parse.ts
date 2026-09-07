@@ -50,6 +50,7 @@ export function parseGeoResponse(input: unknown, domain: string): GeoData {
 		if (!isFactorId(f.id)) throw new Error(`Claude rated an unknown GEO factor: ${String(f.id)}.`);
 		if (!isRating(f.rating))
 			throw new Error(`Claude gave ${f.id} an unknown rating: ${String(f.rating)}.`);
+		if (byId.has(f.id)) throw new Error(`Claude rated the ${f.id} GEO factor twice.`);
 		byId.set(f.id, { id: f.id, rating: f.rating, evidence: clip(f.evidence) });
 	}
 	if (byId.size !== FACTOR_IDS.length) {

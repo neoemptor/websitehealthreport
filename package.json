@@ -30,6 +30,7 @@
 		"chrome-launcher": "^1.2.1",
 		"dictionary-en-au": "^3.0.0",
 		"lighthouse": "^11.7.1",
+		"lighthouse-logger": "^2.0.2",
 		"nspell": "^2.1.5",
 		"puppeteer": "^21.3.8"
 	},

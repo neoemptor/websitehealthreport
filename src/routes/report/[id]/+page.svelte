@@ -82,10 +82,11 @@
 
 	// Analyzer ids are lowercase machine names. A client reads this document, so
 	// they are titled here. The main process owns the authoritative labels, but
-	// they do not cross IPC with a result — this covers all nine ids by shape.
+	// they do not cross IPC with a result — this covers all ten ids by shape.
 	const NAMED: Partial<Record<string, string>> = {
 		seoquake: 'SEO Quake',
 		aeo: 'AI Agent Optimisation',
+		geo: 'GEO (AI citations)',
 		content: 'Spelling and grammar',
 		'traffic-owned': 'Traffic (measured)',
 		'traffic-estimated': 'Traffic (estimated)',

@@ -61,7 +61,7 @@ export const aeoAnalyzer: Analyzer<Record<string, never>> = {
 		try {
 			// Same rationale as the keywords analyzer: executablePath() only
 			// computes a path, it doesn't confirm Chromium was ever downloaded.
-			const executable = puppeteer.executablePath();
+			const executable = await puppeteer.executablePath();
 			if (!fs.existsSync(executable)) {
 				return {
 					available: false,

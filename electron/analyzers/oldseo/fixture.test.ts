@@ -5,9 +5,9 @@ import puppeteer from 'puppeteer';
 import { startStaticServer } from '../../server';
 import { oldSeoAnalyzer } from './index';
 
-const chromium = (() => {
+const chromium = await (async () => {
 	try {
-		return fs.existsSync(puppeteer.executablePath());
+		return fs.existsSync(await puppeteer.executablePath());
 	} catch {
 		return false;
 	}

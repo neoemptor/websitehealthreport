@@ -37,7 +37,7 @@ export const oldSeoAnalyzer: Analyzer<OldSeoSettings> = {
 
 	async preflight() {
 		try {
-			const executable = puppeteer.executablePath();
+			const executable = await puppeteer.executablePath();
 			if (!fs.existsSync(executable)) {
 				return {
 					available: false,

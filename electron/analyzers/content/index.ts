@@ -37,7 +37,7 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
 			// available, launch() then throws, and every content cell reports
 			// failed — "not installed here" flattened into "crashed", which are
 			// different facts to the operator.
-			const executable = puppeteer.executablePath();
+			const executable = await puppeteer.executablePath();
 			if (!fs.existsSync(executable)) {
 				return {
 					available: false,

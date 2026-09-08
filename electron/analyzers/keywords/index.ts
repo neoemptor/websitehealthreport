@@ -21,7 +21,7 @@ export const keywordsAnalyzer: Analyzer<Record<string, never>> = {
 			// available, launch() then throws, and every keywords cell reports
 			// failed — "not installed here" flattened into "crashed", which are
 			// different facts to the operator.
-			const executable = puppeteer.executablePath();
+			const executable = await puppeteer.executablePath();
 			if (!fs.existsSync(executable)) {
 				return {
 					available: false,

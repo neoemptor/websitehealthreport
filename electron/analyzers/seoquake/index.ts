@@ -9,7 +9,7 @@ import { pairLabels, parseToolbar, type SeoQuakeData } from './parse';
 
 export type SeoQuakeSettings = { chromePath: string | null; extensionPath: string | null };
 
-function resolveChrome(settings: SeoQuakeSettings): string {
+async function resolveChrome(settings: SeoQuakeSettings): Promise<string> {
 	if (settings.chromePath) {
 		if (!fs.existsSync(settings.chromePath)) {
 			throw new Error(`Configured Chrome path does not exist: ${settings.chromePath}`);
@@ -20,7 +20,7 @@ function resolveChrome(settings: SeoQuakeSettings): string {
 	// Chrome 137+ ignores --load-extension entirely, so prefer Puppeteer's
 	// bundled Chrome for Testing build, which still honors it. Fall back to a
 	// system Chrome install only if that bundled binary isn't present.
-	const bundled = puppeteer.executablePath();
+	const bundled = await puppeteer.executablePath();
 	if (bundled && fs.existsSync(bundled)) {
 		return bundled;
 	}
@@ -68,7 +68,7 @@ export const seoQuakeAnalyzer: Analyzer<SeoQuakeSettings> = {
 
 	async preflight(settings) {
 		try {
-			resolveChrome(settings);
+			await resolveChrome(settings);
 			resolveExtension(settings);
 			return { available: true };
 		} catch (error) {
@@ -83,7 +83,7 @@ export const seoQuakeAnalyzer: Analyzer<SeoQuakeSettings> = {
 
 		const browser = await puppeteer.launch({
 			headless: false,
-			executablePath: resolveChrome(settings),
+			executablePath: await resolveChrome(settings),
 			args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`]
 		});
 		const close = once(() => browser.close());

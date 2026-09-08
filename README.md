@@ -39,7 +39,7 @@ The second command downloads Puppeteer's own Chromium, used by Keywords, Old SEO
 - **Grammar** (optional): off by default. In Settings choose the LanguageTool public API, which sends the client's page text to languagetool.org, or a LanguageTool server you run yourself.
 - **Traffic (estimated)**: a Semrush Analytics API key, pasted in Settings. Stored encrypted; it never appears in reports, logs or settings files.
 - **Traffic (measured)**: a Google Cloud project with the Search Console API and the Google Analytics Data API enabled, and an OAuth client of type **Desktop app**. Save its client ID and secret in Settings, then connect each client site: a Google sign-in window opens for the site owner to consent (read-only scopes for Search Console and Analytics; loopback redirect on port 8412). Add the site's GA4 property ID in the same section. Refresh tokens are stored encrypted per site and can be disconnected in Settings.
-- **Competitor suggestions** (optional): the New report screen can ask Claude to suggest competitors. It uses the Claude Code command line on your own login, no API key. Install Claude Code and sign in with `claude` once; the panel shows whether it is available.
+- **Competitor suggestions** (optional): the New report screen can ask Claude to suggest competitors. It uses the Claude Code command line on your own login, no API key. Install Claude Code and sign in with `claude` once; the panel shows whether it is available. Works on Windows and macOS (Intel and Apple silicon): on Windows the app finds `claude` on your PATH; on macOS it also checks the usual install locations (`~/.local/bin`, Homebrew, nvm, `~/.claude/local`) and your login shell, so the app works when opened from Finder or the Dock.
 
 ## Run
 

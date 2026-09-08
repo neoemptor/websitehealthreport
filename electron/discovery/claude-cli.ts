@@ -1,4 +1,7 @@
 import { spawn as nodeSpawn } from 'child_process';
+import { readdir, stat } from 'fs/promises';
+import { homedir as osHomedir } from 'os';
+import { delimiter, join } from 'path';
 import type { DiscoveryPreflight } from '../../src/lib/shared/discovery';
 
 /**
@@ -15,8 +18,23 @@ export type Spawned = {
 	on(event: 'close', listener: (code: number | null) => void): unknown;
 	on(event: 'error', listener: (error: Error) => void): unknown;
 };
-export type SpawnFn = (command: string, args: string[], options: { cwd?: string }) => Spawned;
-export type CliDeps = { spawn?: SpawnFn; platform?: NodeJS.Platform };
+export type SpawnFn = (
+	command: string,
+	args: string[],
+	options: { cwd?: string; env?: NodeJS.ProcessEnv }
+) => Spawned;
+export type CliDeps = {
+	spawn?: SpawnFn;
+	platform?: NodeJS.Platform;
+	/** Environment the children inherit; PATH is widened on macOS/Linux. Defaults to process.env. */
+	env?: NodeJS.ProcessEnv;
+	/** Defaults to os.homedir(). */
+	homedir?: string;
+	/** Reports whether a path is an existing file. Defaults to fs.stat. */
+	isFile?: (path: string) => Promise<boolean>;
+	/** Lists a directory's entries, or [] when it cannot be read. Defaults to fs.readdir. */
+	listDir?: (path: string) => Promise<string[]>;
+};
 
 /** Claude Code is not installed or not logged in — the same fact as an analyzer's "unavailable". */
 export class ClaudeUnavailableError extends Error {}
@@ -45,7 +63,13 @@ function collect(stream: NodeJS.ReadableStream): Promise<string> {
 function exec(
 	command: string,
 	args: string[],
-	opts: { cwd?: string; stdin?: string; timeoutMs: number; signal?: AbortSignal },
+	opts: {
+		cwd?: string;
+		env?: NodeJS.ProcessEnv;
+		stdin?: string;
+		timeoutMs: number;
+		signal?: AbortSignal;
+	},
 	spawn: SpawnFn
 ): Promise<Exit> {
 	return new Promise<Exit>((resolve, reject) => {
@@ -53,7 +77,7 @@ function exec(
 			reject(new Error('Aborted: the request was cancelled.'));
 			return;
 		}
-		const child = spawn(command, args, { cwd: opts.cwd });
+		const child = spawn(command, args, { cwd: opts.cwd, env: opts.env });
 		const stdout = collect(child.stdout);
 		const stderr = collect(child.stderr);
 		let settled = false;
@@ -98,10 +122,55 @@ function toSpawnCommand(command: string, args: string[]): { command: string; arg
 	return { command: 'cmd.exe', args: ['/d', '/s', '/c', command, ...args] };
 }
 
-async function locateBinary(deps: Required<CliDeps>, signal?: AbortSignal): Promise<string | null> {
-	const finder = deps.platform === 'win32' ? 'where' : 'which';
+/**
+ * Where Claude Code's installers put the `claude` command on macOS and Linux.
+ * A packaged app opened from Finder or the Dock inherits a bare PATH
+ * (/usr/bin:/bin:/usr/sbin:/sbin), so these are searched explicitly rather
+ * than trusting whatever PATH the app was born with. Windows GUI apps inherit
+ * the user's PATH, so `where` is enough there.
+ */
+async function unixSearchDirs(deps: Required<CliDeps>): Promise<string[]> {
+	const home = deps.homedir;
+	const dirs = [
+		join(home, '.local', 'bin'), // native installer (curl | bash)
+		join(home, '.claude', 'local'), // `claude migrate-installer`
+		'/opt/homebrew/bin', // Homebrew on Apple silicon
+		'/usr/local/bin', // Homebrew on Intel, global npm on system node
+		join(home, '.npm-global', 'bin'),
+		join(home, '.volta', 'bin'),
+		join(home, '.bun', 'bin')
+	];
+	// nvm and fnm keep one bin dir per Node version; newest first.
+	for (const root of [
+		join(home, '.nvm', 'versions', 'node'),
+		join(home, '.local', 'share', 'fnm', 'node-versions')
+	]) {
+		const versions = (await deps.listDir(root)).sort().reverse();
+		for (const v of versions) {
+			dirs.push(join(root, v, 'bin'));
+			dirs.push(join(root, v, 'installation', 'bin'));
+		}
+	}
+	return dirs;
+}
+
+/** The env children run with: the app's env, plus the well-known install dirs on PATH (macOS/Linux). */
+async function childEnv(deps: Required<CliDeps>): Promise<NodeJS.ProcessEnv> {
+	if (deps.platform === 'win32') return deps.env;
+	const current = (deps.env.PATH ?? '').split(delimiter).filter((p) => p.length > 0);
+	const extra = (await unixSearchDirs(deps)).filter((dir) => !current.includes(dir));
+	return { ...deps.env, PATH: [...current, ...extra].join(delimiter) };
+}
+
+async function firstOutputLine(
+	command: string,
+	args: string[],
+	env: NodeJS.ProcessEnv,
+	deps: Required<CliDeps>,
+	signal?: AbortSignal
+): Promise<string | null> {
 	try {
-		const exit = await exec(finder, ['claude'], { timeoutMs: 10_000, signal }, deps.spawn);
+		const exit = await exec(command, args, { env, timeoutMs: 10_000, signal }, deps.spawn);
 		if (exit.code !== 0) return null;
 		const first = exit.stdout.split(/\r?\n/).find((line) => line.trim().length > 0);
 		return first ? first.trim() : null;
@@ -111,10 +180,53 @@ async function locateBinary(deps: Required<CliDeps>, signal?: AbortSignal): Prom
 	}
 }
 
+async function locateBinary(
+	deps: Required<CliDeps>,
+	env: NodeJS.ProcessEnv,
+	signal?: AbortSignal
+): Promise<string | null> {
+	if (deps.platform === 'win32') return firstOutputLine('where', ['claude'], env, deps, signal);
+
+	// 1. The well-known install locations, no process needed.
+	for (const dir of await unixSearchDirs(deps)) {
+		const candidate = join(dir, 'claude');
+		if (await deps.isFile(candidate)) return candidate;
+	}
+	// 2. `which` with the widened PATH.
+	const onPath = await firstOutputLine('which', ['claude'], env, deps, signal);
+	if (onPath) return onPath;
+	// 3. Ask the login shell, which loads the operator's own profile (custom
+	// install dirs, version managers). Args are fixed, so nothing user-supplied
+	// reaches the shell.
+	const shell = deps.env.SHELL && deps.env.SHELL.length > 0 ? deps.env.SHELL : '/bin/zsh';
+	const fromShell = await firstOutputLine(shell, ['-lc', 'command -v claude'], env, deps, signal);
+	return fromShell && fromShell.startsWith('/') ? fromShell : null;
+}
+
 function resolveDeps(deps?: CliDeps): Required<CliDeps> {
 	return {
 		spawn: deps?.spawn ?? (nodeSpawn as unknown as SpawnFn),
-		platform: deps?.platform ?? process.platform
+		platform: deps?.platform ?? process.platform,
+		env: deps?.env ?? process.env,
+		homedir: deps?.homedir ?? osHomedir(),
+		isFile:
+			deps?.isFile ??
+			(async (path) => {
+				try {
+					return (await stat(path)).isFile();
+				} catch {
+					return false;
+				}
+			}),
+		listDir:
+			deps?.listDir ??
+			(async (path) => {
+				try {
+					return await readdir(path);
+				} catch {
+					return [];
+				}
+			})
 	};
 }
 
@@ -122,18 +234,19 @@ function resolveDeps(deps?: CliDeps): Required<CliDeps> {
 async function locateAndCheck(
 	deps: Required<CliDeps>,
 	signal?: AbortSignal
-): Promise<{ preflight: DiscoveryPreflight; binary: string | null }> {
-	const binary = await locateBinary(deps, signal);
-	if (!binary) return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
+): Promise<{ preflight: DiscoveryPreflight; binary: string | null; env: NodeJS.ProcessEnv }> {
+	const env = await childEnv(deps);
+	const binary = await locateBinary(deps, env, signal);
+	if (!binary) return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null, env };
 	try {
 		const { command, args } = toSpawnCommand(binary, ['--version']);
-		const exit = await exec(command, args, { timeoutMs: 10_000, signal }, deps.spawn);
+		const exit = await exec(command, args, { env, timeoutMs: 10_000, signal }, deps.spawn);
 		if (exit.code !== 0)
-			return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
-		return { preflight: { available: true, version: exit.stdout.trim() }, binary };
+			return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null, env };
+		return { preflight: { available: true, version: exit.stdout.trim() }, binary, env };
 	} catch (error) {
 		if (signal?.aborted) throw error;
-		return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null };
+		return { preflight: { available: false, reason: NOT_INSTALLED }, binary: null, env };
 	}
 }
 
@@ -158,7 +271,7 @@ export async function runClaude(
 	deps?: CliDeps
 ): Promise<unknown> {
 	const d = resolveDeps(deps);
-	const { preflight, binary } = await locateAndCheck(d, opts.signal);
+	const { preflight, binary, env } = await locateAndCheck(d, opts.signal);
 	if (!preflight.available) throw new ClaudeUnavailableError(preflight.reason);
 	if (!binary) throw new ClaudeUnavailableError(NOT_INSTALLED);
 
@@ -180,7 +293,7 @@ export async function runClaude(
 	const exit = await exec(
 		command,
 		spawnArgs,
-		{ cwd: opts.cwd, stdin: opts.prompt, timeoutMs: opts.timeoutMs, signal: opts.signal },
+		{ cwd: opts.cwd, env, stdin: opts.prompt, timeoutMs: opts.timeoutMs, signal: opts.signal },
 		d.spawn
 	);
 

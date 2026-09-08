@@ -90,15 +90,116 @@ describe('findClaude', () => {
 		expect(calls[1].args).toEqual(['--version']);
 	});
 
-	it('uses which on non-Windows platforms', async () => {
+	// macOS/Linux: nothing in the well-known dirs, no version manager, no login shell needed.
+	const noFiles = {
+		homedir: '/Users/me',
+		isFile: async () => false,
+		listDir: async () => [] as string[],
+		env: { PATH: '/usr/bin:/bin', SHELL: '/bin/zsh' }
+	};
+
+	it('uses which on non-Windows platforms when nothing is in a known install dir', async () => {
 		const { spawn, calls } = fakeSpawn({
 			run: (command) =>
 				command === 'which'
 					? { stdout: '/usr/local/bin/claude\n', code: 0 }
 					: { stdout: '2.1.0\n', code: 0 }
 		});
-		await findClaude({ spawn, platform: 'linux' });
+		const result = await findClaude({ spawn, platform: 'linux', ...noFiles });
+		expect(result).toEqual({ available: true, version: '2.1.0' });
 		expect(calls[0]).toEqual({ command: 'which', args: ['claude'] });
+		expect(calls[1].command).toBe('/usr/local/bin/claude');
+	});
+
+	it('finds the macOS native install in ~/.local/bin without relying on PATH', async () => {
+		const { spawn, calls } = fakeSpawn({
+			run: () => ({ stdout: '2.1.263 (Claude Code)\n', code: 0 })
+		});
+		const result = await findClaude({
+			spawn,
+			platform: 'darwin',
+			...noFiles,
+			isFile: async (path) => path === '/Users/me/.local/bin/claude'
+		});
+		expect(result).toEqual({ available: true, version: '2.1.263 (Claude Code)' });
+		// No which/where: the binary was found directly, then version-checked.
+		expect(calls).toHaveLength(1);
+		expect(calls[0].command).toBe('/Users/me/.local/bin/claude');
+		expect(calls[0].args).toEqual(['--version']);
+	});
+
+	it('finds an nvm-installed claude on Apple silicon, newest Node first', async () => {
+		const { spawn, calls } = fakeSpawn({ run: () => ({ stdout: '2.1.0\n', code: 0 }) });
+		await findClaude({
+			spawn,
+			platform: 'darwin',
+			...noFiles,
+			listDir: async (path) => (path.endsWith('/.nvm/versions/node') ? ['v20.1.0', 'v26.8.1'] : []),
+			isFile: async (path) => path.includes('/.nvm/') && path.endsWith('/claude')
+		});
+		expect(calls[0].command).toBe('/Users/me/.nvm/versions/node/v26.8.1/bin/claude');
+	});
+
+	it('falls back to the login shell on macOS when which finds nothing', async () => {
+		const { spawn, calls } = fakeSpawn({
+			run: (command, args) => {
+				if (command === 'which') return { stdout: '', code: 1 };
+				if (args[0] === '-lc') return { stdout: '/Users/me/custom/claude\n', code: 0 };
+				return { stdout: '2.1.0\n', code: 0 };
+			}
+		});
+		const result = await findClaude({ spawn, platform: 'darwin', ...noFiles });
+		expect(result).toEqual({ available: true, version: '2.1.0' });
+		expect(calls[1]).toEqual({ command: '/bin/zsh', args: ['-lc', 'command -v claude'] });
+		expect(calls[2].command).toBe('/Users/me/custom/claude');
+	});
+
+	it('reports unavailable on macOS when every lookup misses', async () => {
+		const { spawn } = fakeSpawn({ run: () => ({ stdout: '', code: 1 }) });
+		const result = await findClaude({ spawn, platform: 'darwin', ...noFiles });
+		expect(result).toEqual({
+			available: false,
+			reason: 'Claude Code is not installed on this machine.'
+		});
+	});
+
+	it('hands the widened PATH to which and to claude itself on macOS', async () => {
+		const envs: Array<NodeJS.ProcessEnv | undefined> = [];
+		const inner = fakeSpawn({
+			run: (command) =>
+				command === 'which'
+					? { stdout: '/opt/homebrew/bin/claude\n', code: 0 }
+					: { stdout: '2.1.0\n', code: 0 }
+		});
+		const spawn: SpawnFn = (c, a, o) => {
+			envs.push(o.env);
+			return inner.spawn(c, a, o);
+		};
+		await findClaude({ spawn, platform: 'darwin', ...noFiles });
+		for (const env of envs) {
+			const path = env?.PATH ?? '';
+			expect(path.startsWith('/usr/bin:/bin')).toBe(true);
+			expect(path).toContain('/Users/me/.local/bin');
+			expect(path).toContain('/opt/homebrew/bin');
+			expect(path).toContain('/Users/me/.claude/local');
+		}
+	});
+
+	it('leaves the environment alone on Windows', async () => {
+		const envs: Array<NodeJS.ProcessEnv | undefined> = [];
+		const inner = fakeSpawn({
+			run: (command) =>
+				command === 'where'
+					? { stdout: 'C:\\bin\\claude.exe\r\n', code: 0 }
+					: { stdout: '2.1.0\n', code: 0 }
+		});
+		const spawn: SpawnFn = (c, a, o) => {
+			envs.push(o.env);
+			return inner.spawn(c, a, o);
+		};
+		const env = { PATH: 'C:\\Windows' };
+		await findClaude({ spawn, platform: 'win32', env });
+		expect(envs.every((e) => e === env)).toBe(true);
 	});
 });
 

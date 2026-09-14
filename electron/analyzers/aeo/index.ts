@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import puppeteer from 'puppeteer';
 import type { Analyzer } from '../types';
+import { chromeExecutablePath, chromePreflight } from '../chrome';
 import { once, rejectOnAbort } from '../abort';
 import { fetchText } from '../../http';
 import {
@@ -58,20 +58,7 @@ export const aeoAnalyzer: Analyzer<Record<string, never>> = {
 	defaultSettings: {},
 
 	async preflight() {
-		try {
-			// Same rationale as the keywords analyzer: executablePath() only
-			// computes a path, it doesn't confirm Chromium was ever downloaded.
-			const executable = await puppeteer.executablePath();
-			if (!fs.existsSync(executable)) {
-				return {
-					available: false,
-					reason: `Puppeteer's Chromium is not installed at ${executable}. Run "npx puppeteer browsers install chrome".`
-				};
-			}
-			return { available: true };
-		} catch (error) {
-			return { available: false, reason: (error as Error).message };
-		}
+		return chromePreflight();
 	},
 
 	async analyze(domain, _settings, signal): Promise<AeoData> {
@@ -96,7 +83,7 @@ export const aeoAnalyzer: Analyzer<Record<string, never>> = {
 
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
-		const browser = await puppeteer.launch();
+		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 
 		// Closed on abort, not only in the finally below: on a timeout the

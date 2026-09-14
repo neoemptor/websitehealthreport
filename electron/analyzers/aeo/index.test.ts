@@ -23,6 +23,27 @@ vi.mock('puppeteer', () => ({
 	}
 }));
 
+const chromeState = vi.hoisted(() => ({ path: null as string | null }));
+
+// The resolver is mocked so these tests stay about analyzer wiring: whether a
+// real Chrome sits in /Applications decides findChrome()'s answer, and that
+// must not decide whether this suite passes. The chain itself is covered in
+// electron/analyzers/chrome.test.ts.
+vi.mock('../chrome', () => ({
+	chromePreflight: async () =>
+		chromeState.path
+			? { available: true }
+			: {
+					available: false,
+					reason: 'Chrome is not installed where this analyzer can find it. Looked in:\n  /nope'
+			  },
+	chromeExecutablePath: async () => {
+		if (!chromeState.path)
+			throw new Error('Chrome is not installed where this analyzer can find it.');
+		return chromeState.path;
+	}
+}));
+
 vi.mock('../../http', () => ({
 	fetchText: async (url: string) => {
 		if (url.includes('/robots.txt')) {
@@ -84,6 +105,7 @@ beforeEach(() => {
 	state.closes = 0;
 	state.launches = 0;
 	state.executablePath = process.execPath;
+	chromeState.path = process.execPath;
 	state.launch = async () => hangingBrowser();
 	state.homepageStatus = 200;
 	state.homepageBody = '<html></html>';
@@ -96,7 +118,7 @@ beforeEach(() => {
 
 describe('aeo preflight', () => {
 	it('reports unavailable when the Chromium binary is not on disk', () => {
-		state.executablePath = 'C:/definitely/not-here/chrome.exe';
+		chromeState.path = null;
 		return aeoAnalyzer.preflight({}).then((result) => {
 			expect(result.available).toBe(false);
 			expect(result.available === false && result.reason).toContain('not installed');

@@ -1,30 +1,10 @@
 import * as path from 'path';
 
-export const SEOQUAKE_EXTENSION_ID = 'akdgnmcogleenhbclghghlkkdndkjdjc';
+// chromeCandidates moved to the shared analyzer module: every Puppeteer-backed
+// analyzer needs the same system-Chrome fallback, not just SEO Quake.
+export { chromeCandidates } from '../chrome';
 
-export function chromeCandidates(
-	platform: NodeJS.Platform,
-	env: NodeJS.ProcessEnv,
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for interface symmetry with extensionRoot
-	home: string
-): string[] {
-	switch (platform) {
-		case 'win32': {
-			// Chrome installs to either location depending on installer and age,
-			// and the original code omitted the drive letter entirely.
-			const programFiles = env['ProgramFiles'] ?? 'C:\\Program Files';
-			const programFilesX86 = env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
-			return [
-				path.win32.join(programFiles, 'Google', 'Chrome', 'Application', 'chrome.exe'),
-				path.win32.join(programFilesX86, 'Google', 'Chrome', 'Application', 'chrome.exe')
-			];
-		}
-		case 'darwin':
-			return ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
-		default:
-			return ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium'];
-	}
-}
+export const SEOQUAKE_EXTENSION_ID = 'akdgnmcogleenhbclghghlkkdndkjdjc';
 
 function userDataDir(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, home: string): string {
 	switch (platform) {

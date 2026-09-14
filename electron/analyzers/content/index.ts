@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import puppeteer from 'puppeteer';
 import type { Analyzer } from '../types';
+import { chromeExecutablePath, chromePreflight } from '../chrome';
 import { once, rejectOnAbort } from '../abort';
 import { createSpellChecker, extractWords, type Misspelling } from './spelling';
 import { checkGrammar, type GrammarSettings, type GrammarState } from './grammar';
@@ -23,37 +23,13 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
 	defaultSettings: { ignoreWords: [], grammar: { provider: 'off' } },
 
 	async preflight() {
-		try {
-			// The dictionary is the only hard dependency; grammar has its own state.
-			await createSpellChecker();
-		} catch (error) {
-			return { available: false, reason: `Dictionary failed to load: ${(error as Error).message}` };
-		}
-
-		try {
-			// executablePath() only computes a path; it throws for an unsupported
-			// platform, not for a Chromium that was never downloaded or has been
-			// cleared from the cache. Without the existence check preflight says
-			// available, launch() then throws, and every content cell reports
-			// failed — "not installed here" flattened into "crashed", which are
-			// different facts to the operator.
-			const executable = await puppeteer.executablePath();
-			if (!fs.existsSync(executable)) {
-				return {
-					available: false,
-					reason: `Puppeteer's Chromium is not installed at ${executable}. Run "npx puppeteer browsers install chrome".`
-				};
-			}
-			return { available: true };
-		} catch (error) {
-			return { available: false, reason: (error as Error).message };
-		}
+		return chromePreflight();
 	},
 
 	async analyze(domain, settings, signal): Promise<ContentData> {
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
-		const browser = await puppeteer.launch();
+		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 
 		// Closed on abort, not only in the finally below: on a timeout the

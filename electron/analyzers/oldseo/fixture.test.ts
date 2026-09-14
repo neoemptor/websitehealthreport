@@ -1,17 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
 import * as path from 'path';
-import puppeteer from 'puppeteer';
 import { startStaticServer } from '../../server';
+import { findChrome } from '../chrome';
 import { oldSeoAnalyzer } from './index';
 
-const chromium = await (async () => {
-	try {
-		return fs.existsSync(await puppeteer.executablePath());
-	} catch {
-		return false;
-	}
-})();
+// Any Chrome the analyzer can reach will do, not only Puppeteer's own
+// download: the analyzer falls back to a system install, so gating on the
+// download alone skipped this test on machines where it would have run.
+const chromium = (await findChrome()).path !== null;
 
 describe.skipIf(!chromium)('oldseo against the fixture site', () => {
 	it('finds one of each trick and honours robots', async () => {

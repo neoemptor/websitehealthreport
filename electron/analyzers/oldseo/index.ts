@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import puppeteer from 'puppeteer';
 import type { Analyzer } from '../types';
+import { chromeExecutablePath, chromePreflight } from '../chrome';
 import { once, rejectOnAbort } from '../abort';
 import type { OldSeoData, Finding } from '../../../src/lib/shared/oldseo';
 import type { PageSnapshot } from './snapshot';
@@ -36,24 +36,13 @@ export const oldSeoAnalyzer: Analyzer<OldSeoSettings> = {
 	defaultSettings: { maxPages: DEFAULT_MAX_PAGES },
 
 	async preflight() {
-		try {
-			const executable = await puppeteer.executablePath();
-			if (!fs.existsSync(executable)) {
-				return {
-					available: false,
-					reason: `Puppeteer's Chromium is not installed at ${executable}. Run "npx puppeteer browsers install chrome".`
-				};
-			}
-			return { available: true };
-		} catch (error) {
-			return { available: false, reason: (error as Error).message };
-		}
+		return chromePreflight();
 	},
 
 	async analyze(domain, settings, signal): Promise<OldSeoData> {
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
-		const browser = await puppeteer.launch();
+		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 		const onAbort = () => void close();
 		signal.addEventListener('abort', onAbort, { once: true });

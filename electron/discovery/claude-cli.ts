@@ -1,7 +1,7 @@
 import { spawn as nodeSpawn } from 'child_process';
 import { readdir, stat } from 'fs/promises';
 import { homedir as osHomedir } from 'os';
-import { delimiter, join } from 'path';
+import { posix as unixPath } from 'path';
 import type { DiscoveryPreflight } from '../../src/lib/shared/discovery';
 
 /**
@@ -44,6 +44,13 @@ export class ClaudeFailedError extends Error {
 		super(message);
 	}
 }
+
+/**
+ * The macOS/Linux search below builds POSIX paths whatever host it runs on, so
+ * `path.posix` and a literal ':' are used instead of the host's separators. On
+ * Windows none of that code runs; in the tests it runs on every host.
+ */
+const UNIX_PATH_DELIMITER = ':';
 
 const NOT_INSTALLED = 'Claude Code is not installed on this machine.';
 const NOT_LOGGED_IN = 'Claude Code is not logged in. Run claude in a terminal and sign in.';
@@ -132,23 +139,23 @@ function toSpawnCommand(command: string, args: string[]): { command: string; arg
 async function unixSearchDirs(deps: Required<CliDeps>): Promise<string[]> {
 	const home = deps.homedir;
 	const dirs = [
-		join(home, '.local', 'bin'), // native installer (curl | bash)
-		join(home, '.claude', 'local'), // `claude migrate-installer`
+		unixPath.join(home, '.local', 'bin'), // native installer (curl | bash)
+		unixPath.join(home, '.claude', 'local'), // `claude migrate-installer`
 		'/opt/homebrew/bin', // Homebrew on Apple silicon
 		'/usr/local/bin', // Homebrew on Intel, global npm on system node
-		join(home, '.npm-global', 'bin'),
-		join(home, '.volta', 'bin'),
-		join(home, '.bun', 'bin')
+		unixPath.join(home, '.npm-global', 'bin'),
+		unixPath.join(home, '.volta', 'bin'),
+		unixPath.join(home, '.bun', 'bin')
 	];
 	// nvm and fnm keep one bin dir per Node version; newest first.
 	for (const root of [
-		join(home, '.nvm', 'versions', 'node'),
-		join(home, '.local', 'share', 'fnm', 'node-versions')
+		unixPath.join(home, '.nvm', 'versions', 'node'),
+		unixPath.join(home, '.local', 'share', 'fnm', 'node-versions')
 	]) {
 		const versions = (await deps.listDir(root)).sort().reverse();
 		for (const v of versions) {
-			dirs.push(join(root, v, 'bin'));
-			dirs.push(join(root, v, 'installation', 'bin'));
+			dirs.push(unixPath.join(root, v, 'bin'));
+			dirs.push(unixPath.join(root, v, 'installation', 'bin'));
 		}
 	}
 	return dirs;
@@ -157,9 +164,9 @@ async function unixSearchDirs(deps: Required<CliDeps>): Promise<string[]> {
 /** The env children run with: the app's env, plus the well-known install dirs on PATH (macOS/Linux). */
 async function childEnv(deps: Required<CliDeps>): Promise<NodeJS.ProcessEnv> {
 	if (deps.platform === 'win32') return deps.env;
-	const current = (deps.env.PATH ?? '').split(delimiter).filter((p) => p.length > 0);
+	const current = (deps.env.PATH ?? '').split(UNIX_PATH_DELIMITER).filter((p) => p.length > 0);
 	const extra = (await unixSearchDirs(deps)).filter((dir) => !current.includes(dir));
-	return { ...deps.env, PATH: [...current, ...extra].join(delimiter) };
+	return { ...deps.env, PATH: [...current, ...extra].join(UNIX_PATH_DELIMITER) };
 }
 
 async function firstOutputLine(
@@ -189,7 +196,7 @@ async function locateBinary(
 
 	// 1. The well-known install locations, no process needed.
 	for (const dir of await unixSearchDirs(deps)) {
-		const candidate = join(dir, 'claude');
+		const candidate = unixPath.join(dir, 'claude');
 		if (await deps.isFile(candidate)) return candidate;
 	}
 	// 2. `which` with the widened PATH.

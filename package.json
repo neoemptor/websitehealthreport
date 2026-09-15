@@ -85,6 +85,9 @@
 			]
 		}
 	},
+	"overrides": {
+		"yauzl": "^3.4.0"
+	},
 	"allowScripts": {
 		"electron@33.4.11": true,
 		"esbuild@0.18.20": true,

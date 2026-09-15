@@ -1,6 +1,7 @@
-import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer';
 import type { Analyzer } from '../types';
 import { chromeExecutablePath, chromePreflight } from '../chrome';
+import { loadPuppeteer } from '../puppeteer';
 import { once, rejectOnAbort } from '../abort';
 import { countKeywords, type KeywordCount } from './parse';
 
@@ -20,6 +21,7 @@ export const keywordsAnalyzer: Analyzer<Record<string, never>> = {
 	async analyze(domain, _settings, signal): Promise<KeywordsData> {
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
+		const puppeteer = await loadPuppeteer();
 		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 
@@ -40,10 +42,7 @@ export const keywordsAnalyzer: Analyzer<Record<string, never>> = {
 	}
 };
 
-async function scrape(
-	browser: Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>,
-	domain: string
-): Promise<KeywordsData> {
+async function scrape(browser: Pick<Browser, 'newPage'>, domain: string): Promise<KeywordsData> {
 	const page = await browser.newPage();
 	try {
 		await page.goto(domain, { waitUntil: 'domcontentloaded' });

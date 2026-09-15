@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer';
 import type { Analyzer } from '../types';
 import { once, rejectOnAbort } from '../abort';
+import { loadPuppeteer } from '../puppeteer';
 import { chromeCandidates, extensionRoot, pickLatestVersion } from './paths';
 import { pairLabels, parseToolbar, type SeoQuakeData } from './parse';
 
@@ -20,6 +21,7 @@ async function resolveChrome(settings: SeoQuakeSettings): Promise<string> {
 	// Chrome 137+ ignores --load-extension entirely, so prefer Puppeteer's
 	// bundled Chrome for Testing build, which still honors it. Fall back to a
 	// system Chrome install only if that bundled binary isn't present.
+	const puppeteer = await loadPuppeteer();
 	const bundled = await puppeteer.executablePath();
 	if (bundled && fs.existsSync(bundled)) {
 		return bundled;
@@ -81,6 +83,7 @@ export const seoQuakeAnalyzer: Analyzer<SeoQuakeSettings> = {
 
 		const extensionPath = resolveExtension(settings);
 
+		const puppeteer = await loadPuppeteer();
 		const browser = await puppeteer.launch({
 			headless: false,
 			executablePath: await resolveChrome(settings),
@@ -150,10 +153,7 @@ function extractNodes(): Array<{ kind: 'label' | 'value'; text: string; parent: 
 	return nodes;
 }
 
-async function scrape(
-	browser: Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>,
-	domain: string
-): Promise<SeoQuakeData> {
+async function scrape(browser: Pick<Browser, 'newPage'>, domain: string): Promise<SeoQuakeData> {
 	const page = await browser.newPage();
 	try {
 		await page.setViewport({ width: 1600, height: 1000 });

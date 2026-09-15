@@ -6,13 +6,13 @@ const state = vi.hoisted(() => ({
 	present: new Set<string>()
 }));
 
-vi.mock('puppeteer', () => ({
-	default: {
+vi.mock('./puppeteer', () => ({
+	loadPuppeteer: async () => ({
 		executablePath: async () => {
 			if (state.throws) throw new Error('Unsupported platform');
 			return state.executablePath;
 		}
-	}
+	})
 }));
 
 vi.mock('fs', () => ({

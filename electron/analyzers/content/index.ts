@@ -1,6 +1,7 @@
-import puppeteer from 'puppeteer';
+import type { Browser } from 'puppeteer';
 import type { Analyzer } from '../types';
 import { chromeExecutablePath, chromePreflight } from '../chrome';
+import { loadPuppeteer } from '../puppeteer';
 import { once, rejectOnAbort } from '../abort';
 import { createSpellChecker, extractWords, type Misspelling } from './spelling';
 import { checkGrammar, type GrammarSettings, type GrammarState } from './grammar';
@@ -29,6 +30,7 @@ export const contentAnalyzer: Analyzer<ContentSettings> = {
 	async analyze(domain, settings, signal): Promise<ContentData> {
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
+		const puppeteer = await loadPuppeteer();
 		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 
@@ -76,7 +78,7 @@ function hostnameWords(domain: string): string[] {
 }
 
 async function scrape(
-	browser: Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>,
+	browser: Pick<Browser, 'newPage'>,
 	domain: string,
 	settings: ContentSettings,
 	signal: AbortSignal,

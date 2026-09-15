@@ -1,6 +1,7 @@
-import puppeteer from 'puppeteer';
+import type { Browser as PuppeteerBrowser } from 'puppeteer';
 import type { Analyzer } from '../types';
 import { chromeExecutablePath, chromePreflight } from '../chrome';
+import { loadPuppeteer } from '../puppeteer';
 import { once, rejectOnAbort } from '../abort';
 import type { OldSeoData, Finding } from '../../../src/lib/shared/oldseo';
 import type { PageSnapshot } from './snapshot';
@@ -42,6 +43,7 @@ export const oldSeoAnalyzer: Analyzer<OldSeoSettings> = {
 	async analyze(domain, settings, signal): Promise<OldSeoData> {
 		if (signal.aborted) throw new Error('Cancelled before the browser was launched.');
 
+		const puppeteer = await loadPuppeteer();
 		const browser = await puppeteer.launch({ executablePath: await chromeExecutablePath() });
 		const close = once(() => browser.close());
 		const onAbort = () => void close();
@@ -58,7 +60,7 @@ export const oldSeoAnalyzer: Analyzer<OldSeoSettings> = {
 	}
 };
 
-type Browser = Pick<Awaited<ReturnType<typeof puppeteer.launch>>, 'newPage'>;
+type Browser = Pick<PuppeteerBrowser, 'newPage'>;
 
 async function crawl(
 	browser: Browser,

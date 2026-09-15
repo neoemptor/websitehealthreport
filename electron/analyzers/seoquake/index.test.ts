@@ -29,14 +29,14 @@ const state = vi.hoisted(() => ({
 	executablePath: () => 'C:/puppeteer/chrome-for-testing/chrome.exe'
 }));
 
-vi.mock('puppeteer', () => ({
-	default: {
+vi.mock('../puppeteer', () => ({
+	loadPuppeteer: async () => ({
 		launch: (opts: unknown) => {
 			state.launchOpts = opts;
 			return state.launch(opts);
 		},
 		executablePath: () => state.executablePath()
-	}
+	})
 }));
 
 vi.mock('fs', () => ({

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import puppeteer from 'puppeteer';
+import { loadPuppeteer } from './puppeteer';
 import type { Preflight } from './types';
 
 /**
@@ -52,6 +52,7 @@ export async function findChrome(): Promise<ChromeLookup> {
 	// platform, not for a Chromium that was never downloaded or has been
 	// cleared from the cache, so the existence check is the real test.
 	try {
+		const puppeteer = await loadPuppeteer();
 		const bundled = await puppeteer.executablePath();
 		if (bundled) {
 			looked.push(bundled);

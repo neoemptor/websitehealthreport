@@ -15,8 +15,8 @@ const state = vi.hoisted(() => ({
 	visits: [] as string[]
 }));
 
-vi.mock('puppeteer', () => ({
-	default: {
+vi.mock('../puppeteer', () => ({
+	loadPuppeteer: async () => ({
 		executablePath: () => state.executablePath,
 		launch: async () => {
 			state.launches++;
@@ -51,7 +51,7 @@ vi.mock('puppeteer', () => ({
 				}
 			};
 		}
-	}
+	})
 }));
 
 const chromeState = vi.hoisted(() => ({ path: null as string | null }));

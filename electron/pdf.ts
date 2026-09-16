@@ -128,21 +128,21 @@ export async function exportRunPdf(opts: ExportOptions): Promise<string> {
 		const pdf = await window.webContents.printToPDF({
 			printBackground: true,
 			pageSize: 'A4',
+			// No margins option: the page box is set by @page in src/app.css
+			// (16mm, 20mm at the foot for the footer below), and Chromium lets
+			// that CSS win over anything passed here. Verified on Electron 44 by
+			// printing this report at every margins variant — including
+			// marginType: 'none' against two inches — and getting byte-identical
+			// output each time, while changing the @page rule alone moved the
+			// report from three pages to four. A margins option here would read
+			// as the thing that controls the page, and it is not.
 			// Chromium only repeats page furniture when it is supplied here. A
 			// position:fixed footer in the page renders once, not per page, so the
 			// footer lives in the print options rather than in the Svelte route —
 			// the one place where screen and PDF deliberately differ.
 			displayHeaderFooter: true,
 			headerTemplate: '<div></div>',
-			footerTemplate: footerTemplate(opts.footerDate ?? ''),
-			// Inches, and Electron's types now say so. Up to Electron 43 they
-			// claimed pixels and needed a marginType: 'custom' alongside them,
-			// or the four values were silently ignored — runtime disagreed with
-			// the types, and 48 threw "margins must be less than or equal to
-			// pageSize" against an ~8.27in-wide A4 page. Electron 44 removed
-			// marginType and documents these as inches, which is what they
-			// always were.
-			margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }
+			footerTemplate: footerTemplate(opts.footerDate ?? '')
 		});
 
 		await fs.mkdir(path.dirname(opts.outPath), { recursive: true });

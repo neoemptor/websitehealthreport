@@ -135,14 +135,14 @@ export async function exportRunPdf(opts: ExportOptions): Promise<string> {
 			displayHeaderFooter: true,
 			headerTemplate: '<div></div>',
 			footerTemplate: footerTemplate(opts.footerDate ?? ''),
-			// top/bottom/left/right are only honoured when marginType is
-			// 'custom' — without it they're silently ignored. Electron's types
-			// say these are pixels, but at runtime, with a named pageSize preset
-			// like 'A4', they're compared against the page size in inches
-			// (48 throws "margins must be less than or equal to pageSize"
-			// against an ~8.27in-wide A4 page) — so these are inches, matching
-			// the page dimensions, not pixels.
-			margins: { marginType: 'custom', top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }
+			// Inches, and Electron's types now say so. Up to Electron 43 they
+			// claimed pixels and needed a marginType: 'custom' alongside them,
+			// or the four values were silently ignored — runtime disagreed with
+			// the types, and 48 threw "margins must be less than or equal to
+			// pageSize" against an ~8.27in-wide A4 page. Electron 44 removed
+			// marginType and documents these as inches, which is what they
+			// always were.
+			margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }
 		});
 
 		await fs.mkdir(path.dirname(opts.outPath), { recursive: true });

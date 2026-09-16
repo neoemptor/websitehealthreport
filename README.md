@@ -90,6 +90,8 @@ npm run electron:compile
 
 Layout: `electron/` is the main process (analyzers under `electron/analyzers/<id>/`, each with a pure parse half and an I/O half; `handlers.ts` holds the IPC handlers and must not import from `electron`; `ipc.ts` is the only file that does). `src/` is the SvelteKit renderer; `src/lib/report/` holds the report components, `severity.ts` (the verdict words) and `grade.ts`. Design and product context are recorded in `DESIGN.md` and `PRODUCT.md`; specs and plans under `docs/superpowers/`.
 
+The `yauzl` override in `package.json` is load-bearing. `extract-zip@2.0.1` pins yauzl 2.10, whose raw-inflate streams stop a few bytes short of the end of a file on Node 24 and newer and never emit `end`, so an extraction hangs on its first entry while the process exits 0 over an empty directory. It reached the tree through Electron's postinstall originally; Electron 44 unpacks with its own fork and no longer needs it, but `lighthouse` still pulls `extract-zip` through `puppeteer-core`, where the same hang would strand a Chromium download. Leave the override in place until `extract-zip` is out of the tree.
+
 Adding a check: implement the `Analyzer` contract in `electron/analyzers/types.ts`, add the id to `AnalyzerId` in `src/lib/shared/types.ts`, register it in `handlers.ts`, list it on the New report screen, add a severity branch and a report component. A check without a component falls back to its raw readings, so the report never breaks.
 
 ## Privacy

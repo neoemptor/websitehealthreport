@@ -1,0 +1,56 @@
+name: CI
+
+# The gates that already guard a release, moved to where they catch things
+# earlier. "Build installers" runs the same three commands, but only on a tag
+# or a manual dispatch — by then a broken branch has already been merged. This
+# runs them on every pull request instead.
+#
+# Linux only, and no installer build: the three-OS matrix belongs to the
+# release workflow, where producing real artifacts is the point. Here the
+# question is only whether the code type-checks, lints and passes its tests,
+# and that answer does not differ by runner enough to pay for three of them on
+# every push.
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# A branch that is pushed twice in a minute does not need the first run's
+# answer; cancelling it frees the runner for the commit anyone actually cares
+# about. main is left alone, so its history keeps a result per commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  check:
+    name: Check, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          # Matches the release workflow: the app downloads Puppeteer's
+          # Chromium on the user's machine when a check first needs it, so
+          # fetching it here would cost minutes for nothing. Tests that need a
+          # browser fall back to the runner's own Chrome.
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+
+      # Three steps rather than one script, so a red run names the gate that
+      # failed in the checks list without anyone opening the log.
+      - name: Type-check
+        run: npm run check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test

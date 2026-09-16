@@ -17,6 +17,7 @@
 	import Unknown from '$lib/report/Unknown.svelte';
 	import Letterhead from '$lib/report/Letterhead.svelte';
 	import Summary from '$lib/report/Summary.svelte';
+	import TrafficFollowUp from '$lib/report/TrafficFollowUp.svelte';
 	import { severityOf } from '$lib/report/severity';
 
 	// Analyzers without a component fall back to their raw values, so adding one
@@ -287,6 +288,12 @@
 					{/each}
 				</section>
 			{/each}
+
+			<!-- Closes the document when the client's traffic sections came back
+			     blank. It is the one block that speaks to the reader rather than
+			     about the site, so it sits after every domain rather than inside
+			     one, and it renders nothing at all when the numbers are present. -->
+			<TrafficFollowUp {run} />
 		</article>
 	{:else}
 		<p class="font-mono text-[12px] text-white/50">Loading…</p>

@@ -6,9 +6,12 @@
 	$: view = estimatedView(data);
 </script>
 
-{#if view.nothing}
-	<p class="mt-2 text-[12px] text-dark-500">Semrush has no estimate for this site.</p>
-{:else}
+<!-- An empty estimate renders nothing here. The section's finding already says
+     "Semrush has no estimate for this site." in the line directly above (see
+     trafficEstimatedSeverity), and repeating it verbatim a line later read as
+     a mistake rather than as emphasis. The gap still explains itself — once,
+     where the verdict belongs. -->
+{#if !view.nothing}
 	<p class="mt-2 text-[11px] text-dark-500">Estimates from Semrush, not measured traffic.</p>
 	<table class="mt-2 w-full break-inside-avoid border-collapse text-left">
 		<tbody>

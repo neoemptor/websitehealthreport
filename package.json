@@ -43,7 +43,7 @@
 		"autoprefixer": "^10.5.4",
 		"concurrently": "^9.2.4",
 		"electron": "^44.4.1",
-		"electron-builder": "^25.1.8",
+		"electron-builder": "^26.15.3",
 		"eslint": "^8.28.0",
 		"eslint-config-prettier": "^8.5.0",
 		"eslint-plugin-svelte": "^2.30.0",
